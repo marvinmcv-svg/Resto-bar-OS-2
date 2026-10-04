@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "build:demo": "node scripts/build-demo.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
