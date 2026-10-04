@@ -1,7 +1,8 @@
 # ADR-002: Offline sync strategy
 
-- Status: Proposed. **Must be validated by a spike with scripted network kills before Phase 1 work.**
-- Context: A busy service night with no internet must not stop orders, tickets, or payments.
-- Decision (default): a **custom outbox over Supabase**. The device writes `order_events` (client-generated UUIDv7 + device sequence number) to IndexedDB, then pushes the batch to `/api/sync` (idempotent on event id). It pulls changes by cursor. The server is the source of truth for menu and config; the device is the source of truth for events it created. Conflicts on mutable rows: last-writer-wins by server time, except for money (append-only, never overwritten).
-- Alternative to evaluate in the spike: a managed sync layer (e.g. PowerSync/ElectricSQL) `[VERIFY: fit, cost, offline guarantees]`.
-- Acceptance: 30 minutes offline, 200 events across 2 devices, reconnect → zero loss, zero duplicates, < 2 minutes to converge.
+- Status: **Deferred to Jan 2027** (2026-10-04)
+- Context: A full offline mode (local DB + outbox + conflict handling) can't be built and proven in time for the Oct-Dec launches. Shipping it half-done is worse than not shipping it.
+- Decision for 2026: **online-first**. Reliability comes from operations: router failover to a hotspot/4G modem, plus a printable paper order pad. We don't promise offline mode in sales material.
+- Kept for later: all device-created rows use client-generated UUIDs, and `order_events` is append-only with `(device_id, seq)` unique, so the outbox design below drops in without migrations.
+- Jan 2027 design (to validate by spike): device writes events to IndexedDB, pushes batches to `/api/sync` (idempotent on event id), pulls by cursor. Compare against a managed sync layer `[VERIFY]`.
+- Acceptance before announcing: 30 minutes offline, 2 devices, 200 events → zero loss, zero duplicates, converged in < 2 minutes.

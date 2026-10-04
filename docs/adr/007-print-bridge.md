@@ -1,5 +1,7 @@
-# ADR-007: Print bridge
+# ADR-007: Printing
 
-- Status: Proposed
-- Decision: v1 sends **ESC/POS over TCP 9100** to network printers. Browsers can't open raw TCP, so we ship a tiny local bridge (a Node service on a shop PC or Android device, or later a Capacitor plugin) that exposes `POST /print` on the LAN with a pairing token. Ticket templates are rendered server-agnostic in shared TS (`packages/tickets`). Each station maps to a printer IP. If the bridge is down, the POS shows a red status and the device-health view alerts us.
-- Spike in week 2: test the bridge with the recommended printer `[VERIFY model]`.
+- Status: **Revised** (2026-10-04)
+- Decision: the **Capacitor cashier hub** (ADR-001) sends ESC/POS over TCP 9100 to network printers through a native socket plugin `[VERIFY plugin choice in week 2]`. No separate print-bridge service in 2026.
+- Ticket templates are shared TypeScript (80mm, 48 columns). Station routing comes from `menu_categories.print_station`. Each station maps to a printer IP.
+- A failed print is never silent: the hub retries, shows a red banner, and offers reprint. Device health reports printer status to the cloud.
+- Spike in week 2 with the real printer model partner #1 will use.

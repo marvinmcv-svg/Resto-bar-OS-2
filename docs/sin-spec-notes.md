@@ -22,6 +22,9 @@ Use the **fastest legal path**: integrate with an already-authorized invoicing p
 | 11 | Required invoice delivery to the customer (printed, email, WhatsApp, QR)? Time limits? | Receipt design | | |
 | 12 | Which "modality" applies to restaurants in groups 9-12 (online computerized vs electronic)? | Signing requirements | | |
 | 13 | Homologation process for our own system: steps, cost, duration | 2027 plan | | |
+| 14 | What free tools does SIN offer restaurants today (SIAT portal, *Facilito* app)? How slow is it per invoice? | Our pitch competes with "free"; defines the retyping-time saving | | |
+| 15 | Can a restaurant use SIN's free tool now and switch to our provider integration later without re-registering? | Partner #1 opens before our integration is live | | |
+| 16 | What must Marvin register to invoice his own SaaS clients (activity, modality)? | We must issue invoices for our own subscription | | |
 
 ## 3. Provider comparison template
 
@@ -31,7 +34,7 @@ Use the **fastest legal path**: integrate with an already-authorized invoicing p
 | | | | | | | | |
 | | | | | | | | |
 
-**Decision rule:** choose the provider with an API + sandbox whose cost at 1,500 invoices/month is ≤ 20% of our price (≤ Bs 70). If none qualify, pass the provider's fee through to the client as a separate line, and say so openly in the offer.
+**Decision rule:** choose the provider with an API + sandbox whose cost at 1,500 invoices/month is ≤ 20% of our price (≤ Bs 70). Then set the included invoice allowance (provisionally 2,000/month, `docs/business/offer.md`) so that the provider's cost at the allowance stays within that limit. **Deadline: Oct 11**, because the wedge v1 build depends on it.
 
 ## 4. What Marvin must supply / do in person
 - Calls to 2-3 providers (sales + technical).
