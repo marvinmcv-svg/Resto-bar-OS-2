@@ -30,5 +30,11 @@ Next.js 15 App Router, TypeScript, Supabase (Postgres/Auth/Realtime), Drizzle, T
 - UI copy is Spanish (Bolivia). Code, comments, and docs are English.
 - Polished over MVP: ship less scope, never rough features.
 
+## Frontend
+- Design system: `docs/design/DESIGN.md`. Use tokens from `src/app/globals.css`, never raw hex in components.
+- Routes: `(admin)` = owner back office (`/resumen`, `/menu`); `(pos)` = always-dark POS (`/pos`, `/pos/mesa/[tableId]`).
+- Demo state lives in `src/modules/pos/store.tsx` (client, localStorage). Domain math is in `src/modules/pos/order.ts` and must stay pure and tested.
+- UI primitives: `src/components/ui` (Shadcn/Radix). No `transition: all`; use `press`, `glass`, `tabular` utilities.
+
 ## Domain skills
 `.claude/skills/{pos,compliance-sin,offline-sync,print-bridge,n8n-automations}/SKILL.md`

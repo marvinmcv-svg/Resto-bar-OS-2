@@ -25,7 +25,15 @@ export default function Home() {
           <li key={f}>✓ {f}</li>
         ))}
       </ul>
-      <ul className="mt-8 space-y-2 rounded-lg border border-current/20 p-4">
+      <div className="mt-8 flex flex-wrap gap-3">
+        <a href="/pos" className="press inline-flex h-12 items-center rounded-xl bg-primary px-6 text-[15px] font-semibold text-primary-foreground">
+          Abrir la caja (demo)
+        </a>
+        <a href="/resumen" className="press inline-flex h-12 items-center rounded-xl border bg-card px-6 text-[15px] font-semibold">
+          Ver el resumen del dueño
+        </a>
+      </div>
+      <ul className="mt-8 space-y-2 rounded-2xl border bg-card p-5">
         {guarantees.map((g) => (
           <li key={g}>{g}</li>
         ))}
