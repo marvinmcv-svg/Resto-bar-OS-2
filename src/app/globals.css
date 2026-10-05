@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss" source("../");
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
@@ -48,6 +48,7 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -87,6 +88,7 @@
   --chart-3: #1baf7a;
   --chart-4: #eda100;
   --chart-5: #e87ba4;
+  --chart-6: #008300;
   --chart-grid: #e8e8ec;
   /* Status (fixed meaning; always shipped with icon + label) */
   --status-good: #0ca30c;
@@ -135,6 +137,7 @@
   --chart-3: #199e70;
   --chart-4: #c98500;
   --chart-5: #d55181;
+  --chart-6: #008300;
   --chart-grid: #2c2c2e;
   --status-info: #3987e5;
   --sidebar: #111113;

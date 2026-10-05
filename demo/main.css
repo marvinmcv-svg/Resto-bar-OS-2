@@ -1,0 +1,5 @@
+@import "../src/app/globals.css";
+
+:root {
+  --font-inter: "Inter";
+}

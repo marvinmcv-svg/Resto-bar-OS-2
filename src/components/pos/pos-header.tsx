@@ -18,7 +18,7 @@ export function PosHeader({ children }: { children?: React.ReactNode }) {
   const me = staffById(state.staffId)!;
   return (
     <header className="glass sticky top-0 z-30 flex h-16 items-center gap-3 border-b px-3 sm:px-5">
-      <Link href="/pos" className="flex items-center gap-2.5" aria-label="Salón">
+      <Link href="/pos" className="flex items-center gap-2.5 lg:hidden" aria-label="Salón">
         <LogoMark className="size-9" />
       </Link>
       <div className="flex min-w-0 flex-1 items-center gap-3">{children}</div>

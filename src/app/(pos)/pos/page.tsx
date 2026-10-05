@@ -111,7 +111,8 @@ export default function FloorPage() {
               );
             })}
           </div>
-          <ul className="mx-auto mt-8 flex max-w-[980px] flex-wrap gap-2" aria-label="Leyenda">
+          <ArrivalsStrip />
+          <ul className="mx-auto mt-6 flex max-w-[980px] flex-wrap gap-2" aria-label="Leyenda">
             {(["free", "occupied", "bill", "late"] as TableStatus[]).map((s) => (
               <li key={s}>
                 <StatusBadge status={s} />
@@ -188,5 +189,42 @@ export default function FloorPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/** Accounts opened per hour today (closed + open), like a service timeline. */
+function ArrivalsStrip() {
+  const { state } = useStore();
+  const now = useNow(60000);
+  const hours = Array.from({ length: 13 }, (_, i) => 11 + i);
+  const counts = hours.map(
+    (h) =>
+      state.history.filter((o) => new Date(o.closedAt).getHours() === h).length +
+      state.live.filter((o) => new Date(o.openedAt).getHours() === h).length,
+  );
+  const max = Math.max(...counts, 1);
+  const current = new Date(now).getHours();
+  return (
+    <section className="mx-auto mt-8 max-w-[980px] rounded-[22px] border bg-card p-4" aria-label="Cuentas por hora">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="text-[13px] font-semibold">Cuentas por hora</h2>
+        <span className="text-xs text-muted-foreground tabular">{counts.reduce((a, b) => a + b, 0)} hoy</span>
+      </div>
+      <div className="grid grid-cols-13 items-end gap-1.5" style={{ gridTemplateColumns: `repeat(${hours.length}, minmax(0, 1fr))` }}>
+        {hours.map((h, i) => (
+          <div key={h} className="flex flex-col items-center gap-1.5" title={`${h}:00 · ${counts[i]} cuentas`}>
+            <div className="flex h-12 w-full items-end">
+              <div
+                className={cn("w-full rounded-t-[4px]", h === current ? "bg-primary" : "bg-muted-foreground/30")}
+                style={{ height: `${Math.max((counts[i] / max) * 100, counts[i] ? 8 : 2)}%` }}
+              />
+            </div>
+            <span className={cn("text-[10.5px] tabular", h === current ? "font-semibold text-primary" : "text-muted-foreground")}>
+              {h}h
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

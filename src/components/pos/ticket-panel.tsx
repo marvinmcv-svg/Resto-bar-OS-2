@@ -3,9 +3,11 @@
 import { ChefHat, Minus, Plus, Receipt, Send, Trash2, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatBs } from "@/modules/pos/money";
+import { itemById } from "@/modules/pos/store";
 import { activeLines, balanceMinor, itemCount, lineTotalMinor, orderTotalMinor, paidMinor, unsentLines } from "@/modules/pos/order";
 import type { Order, OrderLine } from "@/modules/pos/types";
 import { cn } from "@/lib/utils";
+import { ItemImage } from "./item-image";
 
 function Line({
   line, onQty, onRemove, onVoid,
@@ -16,9 +18,19 @@ function Line({
   onVoid?: () => void;
 }) {
   const mods = [...line.modifiers.map((m) => m.name), line.note && `“${line.note}”`].filter(Boolean).join(" · ");
+  const item = itemById(line.itemId);
   return (
     <li className={cn("group flex gap-3 py-3", line.voided && "opacity-50")}>
-      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-secondary text-[13px] font-semibold tabular">{line.qty}</span>
+      <span className="relative shrink-0">
+        {item ? (
+          <ItemImage item={item} className="size-12 rounded-[12px]" sizes="48px" />
+        ) : (
+          <span className="block size-12 rounded-[12px] bg-secondary" />
+        )}
+        <span className="absolute -top-1.5 -right-1.5 grid min-w-6 place-items-center rounded-full border-2 border-card bg-foreground px-1.5 text-[11px] leading-5 font-bold text-background tabular">
+          {line.qty}
+        </span>
+      </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <span className={cn("text-[14px] font-medium", line.voided && "line-through")}>{line.name}</span>
@@ -128,21 +140,24 @@ export function TicketPanel({
             <span className="tabular">−{formatBs(paid)}</span>
           </div>
         )}
-        <div className="flex items-baseline justify-between">
-          <span className="text-[15px] font-medium text-muted-foreground">{paid > 0 ? "Falta" : "Total"}</span>
-          <span className="text-[28px] font-semibold tracking-[-0.02em] tabular">{formatBs(paid > 0 ? balanceMinor(order) : total)}</span>
+        <div className="flex items-end justify-between">
+          <span>
+            <span className="block text-[15px] font-medium text-muted-foreground">{paid > 0 ? "Falta" : "Total"}</span>
+            <span className="block text-[11px] text-muted-foreground">IVA incluido</span>
+          </span>
+          <span className="text-[30px] leading-none font-semibold tracking-[-0.025em] tabular">
+            {formatBs(paid > 0 ? balanceMinor(order) : total)}
+          </span>
         </div>
-        <p className="text-right text-[11px] text-muted-foreground">Precios con IVA incluido</p>
-        <div className="grid grid-cols-2 gap-2">
-          <Button size="xl" variant="secondary" disabled={pending.length === 0} onClick={onSend}>
-            <Send /> Enviar{pending.length > 0 && ` (${pending.reduce((s, l) => s + l.qty, 0)})`}
+        {pending.length > 0 ? (
+          <Button size="xl" className="w-full" onClick={onSend}>
+            <Send /> Enviar a cocina ({pending.reduce((s, l) => s + l.qty, 0)})
           </Button>
-          <Button size="xl" disabled={activeLines(order).length === 0 || pending.length > 0} onClick={onCheckout}>
-            Cobrar
+        ) : (
+          <Button size="xl" className="w-full justify-between" disabled={activeLines(order).length === 0} onClick={onCheckout}>
+            <span>Cobrar</span>
+            <span className="tabular">{formatBs(paid > 0 ? balanceMinor(order) : total)}</span>
           </Button>
-        </div>
-        {pending.length > 0 && activeLines(order).length > 0 && (
-          <p className="text-center text-xs text-muted-foreground">Envía el pedido antes de cobrar</p>
         )}
       </div>
     </div>

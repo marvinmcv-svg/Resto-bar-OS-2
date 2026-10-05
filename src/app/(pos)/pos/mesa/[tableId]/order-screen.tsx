@@ -182,7 +182,7 @@ export function OrderScreen({ tableId }: { tableId: string }) {
                       <ItemImage item={it} className="aspect-[4/3] w-full" sizes="(min-width:1280px) 240px, (min-width:640px) 30vw, 50vw" />
                       <span className="flex flex-1 flex-col p-3">
                         <span className="line-clamp-2 text-[14px] leading-snug font-semibold">{it.name}</span>
-                        <span className="mt-1 text-[14px] text-muted-foreground tabular">{formatBs(it.priceMinor)}</span>
+                        <span className="mt-1 text-[15px] font-semibold text-primary tabular">{formatBs(it.priceMinor)}</span>
                       </span>
                       {out ? (
                         <span className="absolute top-2.5 left-2.5 rounded-full bg-black/70 px-2.5 py-1 text-xs font-semibold text-white">Agotado</span>
