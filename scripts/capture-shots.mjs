@@ -7,7 +7,7 @@ const BASE = process.env.BASE ?? "http://localhost:3000";
 const OUT = "public/landing";
 mkdirSync(OUT, { recursive: true });
 
-const PINS = { Roberto: "0000", Daniela: "1234", Ana: "1111", Jorge: "4444", Rosa: "5555", Marvin: "9999" };
+const PINS = { Roberto: "0000", Daniela: "1234", Carla: "2222", Ana: "1111", Jorge: "4444", Rosa: "5555", Marvin: "9999" };
 const browser = await chromium.launch({ executablePath: process.env.PW_CHROMIUM_PATH || undefined });
 
 async function session(who, { width = 1440, height = 900, scale = 2 } = {}) {
@@ -18,6 +18,9 @@ async function session(who, { width = 1440, height = 900, scale = 2 } = {}) {
   await page.reload();
   await page.getByRole("button", { name: new RegExp(`^${who},`) }).click();
   await page.keyboard.type(PINS[who]);
+  const skip = page.getByRole("button", { name: "Ahora no" });
+  await Promise.race([page.waitForURL((u) => !u.pathname.startsWith("/entrar")), skip.waitFor()]);
+  if (await skip.isVisible()) await skip.click();
   await page.waitForURL((u) => !u.pathname.startsWith("/entrar"));
   await settle(page);
   return { ctx, page };
@@ -65,6 +68,13 @@ async function shot(page, name, opts = {}) {
   await ctx.close();
 }
 
+// Cashier: the register
+{
+  const { ctx, page } = await session("Carla");
+  await shot(page, "caja");
+  await ctx.close();
+}
+
 // Kitchen screen
 {
   const { ctx, page } = await session("Rosa");
@@ -83,6 +93,10 @@ async function shot(page, name, opts = {}) {
   await page.keyboard.press("Escape");
   await page.goto(`${BASE}/equipo`);
   await shot(page, "team");
+  await page.getByRole("tab", { name: "Asistencia" }).click();
+  await shot(page, "attendance");
+  await page.getByRole("tab", { name: "Horarios" }).click();
+  await shot(page, "schedule");
   await ctx.close();
 }
 

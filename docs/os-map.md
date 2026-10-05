@@ -34,8 +34,8 @@
 |---|---|---|---|---|
 | Core POS | menu, modifiers, tables, orders from phones, shift close | split/merge checks, tips | discounts, combos, happy hour | multi-location |
 | Kitchen | tickets printed per station (kitchen/bar) | reprint, print-failure alerts | KDS screen | prep analytics |
-| Money | record cash/QR/card/transfer; cash count at close | — | QR reconciliation | payment adapters, take-rate |
-| People | staff PINs, roles (owner/manager/cashier/waiter/bartender/kitchen), audit log | — | — | scheduling, tips distribution |
+| Money | **cash register** (`/caja`): open with a count, bills queue, cash in/out with manager approval, close with expected vs counted; record cash/QR/card/transfer | — | QR reconciliation | payment adapters, take-rate |
+| People | staff PINs, roles (owner/manager/cashier/waiter/bartender/kitchen), audit log, **clock in/out** | — | **schedules, attendance, tip split, accountant hours export** (built in demo, ADR-012) | payroll stays with the accountant |
 | Owner intelligence | — | **WhatsApp daily close** | weekly summary; alerts (void > X, cash gap) | AI margin/reorder |
 | Compliance (BO) | invoices in SIN's free tool (manual) | SIN invoice via provider adapter | IVA Transparente `[VERIFY]` | in-house homologation |
 | Reliability | hotspot failover + printable paper order pad | device health view | offline spike passes | **offline mode (Jan)** |
@@ -59,7 +59,7 @@
 9. **3 design partners each run 2 full consecutive weeks** without going back to paper.
 
 ## 4. Data model (v1 tables)
-`tenants, locations, memberships(role), devices, staff (PIN), menu_categories, menu_items, modifier_groups, modifiers, dining_tables, orders, order_items, order_events, payments, shifts, cash_movements, invoices, invoice_events, webhook_endpoints, webhook_deliveries, audit_log`
+`tenants, locations, memberships(role), devices, staff (PIN), staff_profiles, menu_categories, menu_items, modifier_groups, modifiers, dining_tables, orders, order_items, order_events, payments, shifts, cash_movements, time_entries, schedule_shifts, tip_distributions, invoices, invoice_events, webhook_endpoints, webhook_deliveries, audit_log`
 
 Rules: `tenant_id` + RLS on every row; `(tenant_id, location_id)` foreign keys so a row can't point at another tenant's location; money in integer centavos; currency per location (BOB); soft delete only; payments, invoices, orders and `order_events` are never deleted; client-generated UUIDs (ready for offline in 2027). Role permissions: ADR-010.
 
@@ -79,3 +79,16 @@ Rules: `tenant_id` + RLS on every row; `(tenant_id, location_id)` foreign keys s
 6. SIN provider adapter (week 3-4) ← **compliance risk; provider selected by Oct 11**
 7. Split checks, tips, WhatsApp n8n flow, device health (week 4-5) → **wedge v1**
 8. KDS, QR menu, inventory, offline spike (week 7-12)
+
+## 7. Gap analysis (2026-10-05)
+Everything in the app today runs on the browser demo store (`src/modules/pos/store.tsx`). The database schema and RLS exist and are tested, but nothing is wired to Supabase yet.
+
+| Area | Built (demo) | Missing | When |
+|---|---|---|---|
+| Orders / tables / kitchen | Floor plan, orders, modifiers, send, void with PIN, kitchen screen, upsell, waitlist, guest notes | Transfer/merge tables, course firing, discounts | v1.x |
+| Cash register | `/caja`: open, bills queue, cash in/out, count and close, shift report | Printed close ticket (ESC/POS) | With printing |
+| HR | Files (owner-only pay), clock in/out, schedules, attendance, tip split, CSV for the accountant | Payroll (accountant), leave requests | 2027 |
+| Owner | Dashboard, shift note, last close on the dashboard | Date-range reports, real WhatsApp send | Wedge v1 |
+| **Going live (opening-day blocker)** | Schema + RLS (0001-0003) | Supabase project + auth (owner OTP, device pairing, server PIN check), replace the demo store with Supabase + Realtime, ESC/POS printing (Capacitor), SIN provider adapter, n8n WhatsApp | **Next** |
+| Back office | — | Inventory, recipe cost, suppliers | Dec 2026 |
+| Hotel | — | Rooms, reservations, charge to room | 2027 (out of scope; keep `tenant/location` model ready) |

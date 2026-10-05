@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Clock, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { attendanceFor, dateKey } from "@/modules/hr/time";
 import { toast } from "sonner";
 import { LogoMark } from "@/components/brand/logo";
 import { ROLE_TINT } from "@/components/app/role-tint";
 import { PinPad } from "@/components/pos/pin-pad";
 import { RESTAURANT } from "@/modules/pos/demo-data";
-import { homeFor, ROLE_LABEL, ROLES } from "@/modules/pos/permissions";
-import { useNow, useStore } from "@/modules/pos/store";
+import { can, homeFor, ROLE_LABEL, ROLES } from "@/modules/pos/permissions";
+import { newId, useNow, useStore } from "@/modules/pos/store";
 import type { Staff } from "@/modules/pos/types";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +22,7 @@ export default function EntrarPage() {
   const router = useRouter();
   const now = useNow(15000);
   const [who, setWho] = useState<Staff | null>(null);
+  const [clockFor, setClockFor] = useState<Staff | null>(null);
 
   const order = (s: Staff) => ROLES.indexOf(s.role);
   const team = state.staff.filter((s) => s.active !== false && s.role !== "admin").sort((a, b) => order(a) - order(b));
@@ -28,10 +31,30 @@ export default function EntrarPage() {
   const signIn = (pin: string) => {
     if (!who || pin !== who.pin) return false;
     dispatch({ type: "signIn", staffId: who.id });
+    const clocked = state.timeEntries.some((e) => e.staffId === who.id && !e.outAt);
+    if (can(who.role, "time.clock") && !clocked) {
+      setClockFor(who);
+      return true;
+    }
     toast.success(`Hola, ${who.name}`, { description: ROLE_LABEL[who.role] });
     router.push(homeFor(who.role));
     return true;
   };
+
+  const finishClock = (clockIn: boolean) => {
+    if (!clockFor) return;
+    if (clockIn) {
+      const at = Date.now();
+      dispatch({ type: "clockIn", entry: { id: newId(), staffId: clockFor.id, inAt: at } });
+      toast.success(`Entrada marcada a las ${new Date(at).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}`, {
+        description: `Buen turno, ${clockFor.name}`,
+      });
+    }
+    router.push(homeFor(clockFor.role));
+  };
+
+  const todayShift = clockFor ? state.schedule.find((s) => s.staffId === clockFor.id && s.date === dateKey(new Date(now))) : undefined;
+  const wouldBe = todayShift ? attendanceFor(todayShift, [{ id: "x", staffId: todayShift.staffId, inAt: now }], now) : null;
 
   return (
     <main className="dark relative min-h-dvh overflow-hidden bg-background text-foreground">
@@ -54,7 +77,31 @@ export default function EntrarPage() {
           </time>
         </header>
 
-        {!who ? (
+        {clockFor ? (
+          <section className="animate-enter mx-auto my-auto w-full max-w-[380px] py-10 text-center" aria-labelledby="clock-title">
+            <span className={cn("mx-auto grid size-20 place-items-center rounded-full text-[30px] font-semibold", ROLE_TINT[clockFor.role])}>
+              {clockFor.name[0]}
+            </span>
+            <h1 id="clock-title" className="mt-4 text-[26px] font-semibold">Hola, {clockFor.name}</h1>
+            <p className="mt-1 text-[15px] text-muted-foreground">
+              {todayShift ? `Tu turno de hoy: ${todayShift.start}–${todayShift.end}` : "Hoy no tienes turno programado."}
+            </p>
+            <p className="mt-6 text-[56px] leading-none font-semibold tracking-[-0.04em] tabular" suppressHydrationWarning>
+              {new Date(now).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })}
+            </p>
+            {wouldBe?.kind === "late" && (
+              <p className="mt-3 inline-block rounded-full bg-status-warning/18 px-3 py-1 text-[13px] font-semibold text-status-warning-ink">
+                {wouldBe.minutesLate} min tarde
+              </p>
+            )}
+            <Button size="xl" className="mt-8 w-full" onClick={() => finishClock(true)}>
+              <Clock /> Marcar entrada
+            </Button>
+            <Button size="lg" variant="ghost" className="mt-2 w-full text-muted-foreground" onClick={() => finishClock(false)}>
+              Ahora no
+            </Button>
+          </section>
+        ) : !who ? (
           <section className="animate-enter my-auto py-10" aria-labelledby="who">
             <h1 id="who" className="text-center text-[30px] font-semibold tracking-[-0.02em] sm:text-[40px]">
               ¿Quién está entrando?

@@ -29,9 +29,11 @@ export interface CheckoutResult {
 }
 
 export function CheckoutDialog({
-  order, tableLabel, open, onClose, onPay,
+  order, tableLabel, open, onClose, onPay, cashAllowed = true,
 }: {
   order: Order;
+  /** Cash goes into a drawer: it needs an open register (ADR-012). */
+  cashAllowed?: boolean;
   tableLabel: string;
   open: boolean;
   onClose: () => void;
@@ -169,12 +171,14 @@ export function CheckoutDialog({
                 <button
                   key={id}
                   aria-pressed={method === id}
+                  disabled={id === "cash" && !cashAllowed}
+                  title={id === "cash" && !cashAllowed ? "Abre la caja primero" : undefined}
                   onClick={() => {
                     setMethod(id);
                     setReceived(null);
                   }}
                   className={cn(
-                    "press flex h-[72px] flex-col items-center justify-center gap-1.5 rounded-2xl border text-[13px] font-medium",
+                    "press flex h-[72px] flex-col items-center justify-center gap-1.5 rounded-2xl border text-[13px] font-medium disabled:opacity-40",
                     method === id ? "border-primary bg-primary/12 text-foreground" : "bg-secondary text-muted-foreground",
                   )}
                 >
@@ -183,6 +187,9 @@ export function CheckoutDialog({
                 </button>
               ))}
             </div>
+            {!cashAllowed && (
+              <p className="mt-2 text-[12.5px] text-muted-foreground">Efectivo desactivado: la caja está cerrada. Ábrela en Caja.</p>
+            )}
           </div>
 
           <div>

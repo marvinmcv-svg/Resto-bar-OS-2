@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { Clock, LogOut } from "lucide-react";
+import { toast } from "sonner";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ROLE_LABEL } from "@/modules/pos/permissions";
-import { useStore } from "@/modules/pos/store";
+import { can, ROLE_LABEL } from "@/modules/pos/permissions";
+import { newId, useStore } from "@/modules/pos/store";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/modules/pos/types";
 import { areasFor } from "./areas";
@@ -26,7 +27,7 @@ export function Avatar({ name, role, className }: { name: string; role: Role; cl
 
 /** Signed-in person, the areas their role can open, and "Cambiar de usuario". */
 export function UserMenu({ compact = false, align = "end" }: { compact?: boolean; align?: "start" | "end" }) {
-  const { me, dispatch } = useStore();
+  const { me, dispatch, myClockIn } = useStore();
   const router = useRouter();
   if (!me) return null;
   const areas = areasFor(me.role);
@@ -68,6 +69,24 @@ export function UserMenu({ compact = false, align = "end" }: { compact?: boolean
             </DropdownMenuItem>
           ))}
         <DropdownMenuSeparator />
+        {can(me.role, "time.clock") && (
+          <DropdownMenuItem
+            className="rounded-xl py-2"
+            onSelect={() => {
+              const at = Date.now();
+              const t = new Date(at).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+              if (myClockIn) {
+                dispatch({ type: "clockOut", entryId: myClockIn.id, at });
+                toast.success(`Salida marcada a las ${t}`, { description: "Gracias por el turno." });
+              } else {
+                dispatch({ type: "clockIn", entry: { id: newId(), staffId: me.id, inAt: at } });
+                toast.success(`Entrada marcada a las ${t}`);
+              }
+            }}
+          >
+            <Clock /> {myClockIn ? "Marcar salida" : "Marcar entrada"}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           className="rounded-xl py-2"
           onSelect={() => {

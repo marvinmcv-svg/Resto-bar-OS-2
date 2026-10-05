@@ -133,3 +133,46 @@ export interface Order {
   closedAt?: number;
   billRequested?: boolean;
 }
+
+/** A charge as the till sees it: belongs to one cash-register shift. */
+export interface PaymentRecord {
+  id: string;
+  shiftId: string | null;
+  orderId: string;
+  tableId: string;
+  method: PaymentMethod;
+  amountMinor: number;
+  tipMinor: number;
+  at: number;
+  by: string;
+}
+
+export type CashMovementReason = "compra" | "retiro" | "cambio" | "otro";
+
+/** Cash put into or taken out of the drawer. Append-only: a correction is an opposite movement. */
+export interface CashMovement {
+  id: string;
+  shiftId: string;
+  kind: "in" | "out";
+  amountMinor: number;
+  reason: CashMovementReason;
+  note?: string;
+  at: number;
+  by: string;
+  approvedBy?: string;
+}
+
+/** Bill/coin count: denomination in centavos -> how many. */
+export type CashCount = Record<number, number>;
+
+export interface CashShift {
+  id: string;
+  openedBy: string;
+  openedAt: number;
+  openingMinor: number;
+  closedAt?: number;
+  closedBy?: string;
+  countedMinor?: number;
+  count?: CashCount;
+  expectedMinor?: number;
+}

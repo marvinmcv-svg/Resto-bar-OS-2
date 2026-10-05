@@ -41,6 +41,20 @@ const FEATURES = [
     image: "/landing/kitchen.jpg",
   },
   {
+    eyebrow: "Para tu cajero",
+    title: "Su propia caja: abre, cobra y cierra cuadrado.",
+    text: "Abre el turno contando el efectivo, ve qué mesas piden la cuenta y cobra en un toque. Cada salida de dinero pide el PIN del encargado. Al cerrar, cuenta billetes y el sistema dice si sobra o falta.",
+    points: ["Arqueo por billetes y monedas", "Entradas y salidas con nombre y aprobación", "Diferencias de caja en tu resumen"],
+    image: "/landing/caja.jpg",
+  },
+  {
+    eyebrow: "Tu personal",
+    title: "Horarios, asistencia y propinas, sin cuaderno.",
+    text: "Cada persona marca entrada y salida con su PIN. Ves quién llegó tarde, quién faltó y cuántas horas trabajó. Repartes las propinas por horas en segundos y exportas todo para tu contador.",
+    points: ["Horario semanal y copiar la semana anterior", "Atrasos y faltas automáticos", "Reparto de propinas y exportación para el contador"],
+    image: "/landing/attendance.jpg",
+  },
+  {
     eyebrow: "Para ti, el dueño",
     title: "Sabes cómo va el día sin estar en el local.",
     text: "Ventas por hora, lo más vendido, cómo te pagaron, anulaciones y caja esperada. Y cada noche, el cierre completo en tu WhatsApp.",
@@ -69,7 +83,10 @@ const COMPARE: { row: string; them: string; us: string }[] = [
 ];
 
 const ROADMAP = [
-  { when: "Hoy", items: ["Pedidos desde el celular", "Comandas en cocina y barra", "Roles y PINs", "Menú y agotados", "Cierre de caja"] },
+  {
+    when: "Hoy",
+    items: ["Pedidos desde el celular", "Comandas en cocina y barra", "Roles y PINs", "Menú y agotados", "Caja con arqueo", "Asistencia y propinas"],
+  },
   { when: "Noviembre 2026", items: ["Factura SIN integrada", "Cierre diario en WhatsApp", "Dividir cuentas y propinas"] },
   { when: "Diciembre 2026", items: ["Menú QR", "Inventario básico y costo de recetas"] },
   { when: "Enero 2027", items: ["Modo sin internet", "Reportes semanales"] },
@@ -299,6 +316,7 @@ export default function LandingPage() {
               <ul className="mt-7 space-y-2.5 border-t pt-7 text-[15px]">
                 {[
                   "Pedidos, mesas y cuentas ilimitadas",
+                  "Caja con arqueo, asistencia y propinas",
                   "Usuarios y celulares sin límite",
                   "Pantalla de cocina y comandas",
                   "Roles, PINs y control de anulaciones",

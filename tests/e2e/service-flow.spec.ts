@@ -4,7 +4,8 @@ import { signIn } from "./helpers";
 test.beforeEach(async ({ page }) => {
   // Carla (cashier) takes orders and charges, but voids need a manager PIN.
   await signIn(page, "Carla", { fresh: true });
-  await expect(page).toHaveURL(/\/pos$/);
+  await expect(page).toHaveURL(/\/caja$/);
+  await page.goto("/pos");
 });
 
 test("open a table, order, send, void with PIN, and charge", async ({ page }) => {

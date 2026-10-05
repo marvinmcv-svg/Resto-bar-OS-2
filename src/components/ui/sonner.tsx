@@ -11,7 +11,9 @@ import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  // Service screens force dark; follow the theme actually on screen so text keeps its contrast.
+  const { forcedTheme, resolvedTheme } = useTheme()
+  const theme = forcedTheme ?? resolvedTheme ?? "system"
 
   return (
     <Sonner
@@ -30,8 +32,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
+          "--normal-description": "var(--muted-foreground)",
         } as React.CSSProperties
       }
+      toastOptions={{ classNames: { description: "!text-muted-foreground" } }}
       {...props}
     />
   )

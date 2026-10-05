@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ChevronRight, KeyRound, Minus, UserPlus } from "lucide-react";
+import { Check, ChevronRight, KeyRound, Lock, Minus, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { ChipSelect, Field, TextInput } from "@/components/app/form";
 import { Panel, PanelHeader } from "@/components/app/panel";
 import { ROLE_DOT, ROLE_TINT } from "@/components/app/role-tint";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { formatBs } from "@/modules/pos/money";
+import { AttendanceTable } from "@/components/hr/attendance-table";
+import { ScheduleGrid } from "@/components/hr/schedule-grid";
+import { TipsPanel } from "@/components/hr/tips-panel";
+import type { PayType, StaffProfile } from "@/modules/hr/demo-hr";
+import { PAY_LABEL } from "@/modules/hr/pay";
+import { formatBs, minorToInput, parseBsInput } from "@/modules/pos/money";
 import {
   assignableRoles, can, PERMISSION_LABEL, PERMISSIONS, ROLE_LABEL, ROLE_SUMMARY,
 } from "@/modules/pos/permissions";
@@ -18,9 +23,19 @@ import { cn } from "@/lib/utils";
 
 const TEAM_ROLES: Role[] = ["owner", "manager", "cashier", "waiter", "bartender", "kitchen"];
 
+type Tab = "equipo" | "horarios" | "asistencia" | "propinas";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "equipo", label: "Equipo" },
+  { id: "horarios", label: "Horarios" },
+  { id: "asistencia", label: "Asistencia" },
+  { id: "propinas", label: "Propinas" },
+];
+const hhmm = (t: number) => new Date(t).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
 export default function EquipoPage() {
   const { state, me } = useStore();
   const [editing, setEditing] = useState<Staff | "new" | null>(null);
+  const [tab, setTab] = useState<Tab>("equipo");
   if (!me) return null;
 
   const assignable = assignableRoles(me.role);
@@ -29,23 +44,51 @@ export default function EquipoPage() {
   const inactive = team.filter((s) => s.active === false);
 
   const salesBy = (id: string) => state.history.filter((o) => o.waiterId === id);
+  const crew = active.filter((s) => s.role !== "owner");
+  const clockedIn = (id: string) => state.timeEntries.find((e) => e.staffId === id && !e.outAt);
 
   return (
     <div className="mx-auto max-w-[1080px] px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
       <header className="animate-enter flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[13px] font-medium text-muted-foreground">{active.length} personas activas</p>
-          <h1 className="mt-1 text-[28px] font-semibold sm:text-[34px]">Equipo y permisos</h1>
+          <h1 className="mt-1 text-[28px] font-semibold sm:text-[34px]">Personal</h1>
           <p className="mt-2 max-w-xl text-[15px] text-muted-foreground">
-            Cada persona entra con su PIN y ve solo lo que su rol permite. Los permisos se validan también en la base de datos.
+            Equipo y permisos, horarios, asistencia y propinas. Cada persona marca entrada y salida con su PIN.
           </p>
         </div>
-        <Button size="lg" onClick={() => setEditing("new")}>
-          <UserPlus /> Agregar persona
-        </Button>
+        {tab === "equipo" && (
+          <Button size="lg" onClick={() => setEditing("new")}>
+            <UserPlus /> Agregar persona
+          </Button>
+        )}
       </header>
 
-      <div className="mt-8 grid gap-4 xl:grid-cols-12">
+      <div className="no-scrollbar -mx-4 mt-6 overflow-x-auto px-4">
+        <div className="inline-flex rounded-full bg-secondary p-1" role="tablist" aria-label="Secciones de personal">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={tab === t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "press h-9 rounded-full px-4 text-[13px] font-semibold whitespace-nowrap text-muted-foreground",
+                tab === t.id && "bg-card text-foreground shadow-card",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {tab === "horarios" && <div className="mt-6"><ScheduleGrid team={crew} /></div>}
+      {tab === "asistencia" && <div className="mt-6"><AttendanceTable team={crew} /></div>}
+      {tab === "propinas" && <div className="mt-6"><TipsPanel team={active} /></div>}
+
+      {tab === "equipo" && (
+      <div className="mt-6 grid gap-4 xl:grid-cols-12">
         <Panel className="animate-enter p-2 sm:p-2 xl:col-span-7">
           <ul className="divide-y">
             {active.map((s) => {
@@ -73,6 +116,11 @@ export default function EquipoPage() {
                         {orders.length > 0 && ` · ${orders.length} cuentas hoy · ${formatBs(total)}`}
                       </span>
                     </span>
+                    {clockedIn(s.id) && (
+                      <span className="hidden items-center gap-1.5 rounded-full bg-status-good/14 px-2.5 py-1 text-[12px] font-semibold text-status-good-ink sm:inline-flex">
+                        <span className="size-1.5 rounded-full bg-status-good" aria-hidden /> Trabajando desde {hhmm(clockedIn(s.id)!.inAt)}
+                      </span>
+                    )}
                     {editable && <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
                   </button>
                 </li>
@@ -156,6 +204,7 @@ export default function EquipoPage() {
           </div>
         </Panel>
       </div>
+      )}
 
       <StaffSheet staff={editing} roles={assignable} onClose={() => setEditing(null)} />
     </div>
@@ -169,6 +218,9 @@ function StaffSheet({ staff, roles, onClose }: { staff: Staff | "new" | null; ro
   const [role, setRole] = useState<Role>("waiter");
   const [pin, setPin] = useState("");
   const [tried, setTried] = useState(false);
+  const [profile, setProfile] = useState<StaffProfile>({});
+  const [rate, setRate] = useState("");
+  const seePay = can(me?.role, "hr.pay.view");
 
   useEffect(() => {
     if (!staff) return;
@@ -176,6 +228,9 @@ function StaffSheet({ staff, roles, onClose }: { staff: Staff | "new" | null; ro
     setName(editing?.name ?? "");
     setRole(editing?.role ?? "waiter");
     setPin(editing?.pin ?? "");
+    const prof = editing ? (state.profiles[editing.id] ?? {}) : {};
+    setProfile(prof);
+    setRate(prof.payRateMinor !== undefined ? minorToInput(prof.payRateMinor) : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when a different person opens
   }, [staff]);
 
@@ -185,14 +240,18 @@ function StaffSheet({ staff, roles, onClose }: { staff: Staff | "new" | null; ro
     : state.staff.some((s) => s.active !== false && s.id !== editing?.id && s.pin === pin)
       ? "Ese PIN ya lo usa otra persona."
       : undefined;
+  const rateMinor = rate.trim() ? parseBsInput(rate) : undefined;
+  const rateError = rateMinor === null ? "Escribe un monto, por ejemplo 3300 o 18,50." : undefined;
 
   const save = () => {
     setTried(true);
-    if (nameError || pinError) return;
+    if (nameError || pinError || (seePay && rateError)) return;
+    const id = editing?.id ?? newId();
     dispatch({
       type: "upsertStaff",
-      staff: { id: editing?.id ?? newId(), name: name.trim(), role, pin, active: editing?.active ?? true },
+      staff: { id, name: name.trim(), role, pin, active: editing?.active ?? true },
     });
+    if (seePay) dispatch({ type: "upsertProfile", staffId: id, profile: { ...profile, payRateMinor: rateMinor ?? undefined } });
     toast.success(editing ? `${name.trim()} actualizado` : `${name.trim()} ya puede entrar con su PIN`);
     onClose();
   };
@@ -207,7 +266,7 @@ function StaffSheet({ staff, roles, onClose }: { staff: Staff | "new" | null; ro
 
   return (
     <Sheet open={!!staff} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-[440px]">
+      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-[440px]" onOpenAutoFocus={(e) => e.preventDefault()}>
         <SheetHeader className="border-b px-6 pt-6 pb-4">
           <SheetTitle className="text-[20px]">{editing ? editing.name : "Agregar persona"}</SheetTitle>
           <SheetDescription>
@@ -248,6 +307,51 @@ function StaffSheet({ staff, roles, onClose }: { staff: Staff | "new" | null; ro
               </div>
             )}
           </Field>
+
+          <div className="space-y-4 border-t pt-5">
+            <div>
+              <p className="text-[15px] font-semibold">Ficha personal</p>
+              <p className="text-[12px] text-muted-foreground">CI, contacto y sueldo. Solo el dueño la ve (también en la base de datos).</p>
+            </div>
+            {seePay ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="CI">
+                    {(p) => <TextInput {...p} value={profile.nationalId ?? ""} onChange={(e) => setProfile({ ...profile, nationalId: e.target.value })} placeholder="1234567 SC" />}
+                  </Field>
+                  <Field label="Celular">
+                    {(p) => <TextInput {...p} value={profile.phone ?? ""} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} inputMode="tel" placeholder="+591 7…" />}
+                  </Field>
+                </div>
+                <Field label="Contacto de emergencia">
+                  {(p) => <TextInput {...p} value={profile.emergencyContact ?? ""} onChange={(e) => setProfile({ ...profile, emergencyContact: e.target.value })} placeholder="Nombre y celular" />}
+                </Field>
+                <Field label="Fecha de ingreso">
+                  {(p) => <TextInput {...p} type="date" value={profile.startedOn ?? ""} onChange={(e) => setProfile({ ...profile, startedOn: e.target.value })} />}
+                </Field>
+                <div className="space-y-1.5">
+                  <p className="text-[13px] font-semibold">Forma de pago</p>
+                  <ChipSelect
+                    label="Forma de pago"
+                    value={profile.payType ?? "monthly"}
+                    onChange={(v: PayType) => setProfile({ ...profile, payType: v })}
+                    options={(Object.keys(PAY_LABEL) as PayType[]).map((k) => ({ value: k, label: PAY_LABEL[k] }))}
+                  />
+                </div>
+                <Field
+                  label={`Monto (Bs ${profile.payType === "hourly" ? "por hora" : profile.payType === "per_shift" ? "por turno" : "al mes"})`}
+                  error={tried ? rateError : undefined}
+                  hint="Para el estimado de horas. La planilla la hace tu contador."
+                >
+                  {(p) => <TextInput {...p} value={rate} onChange={(e) => setRate(e.target.value)} inputMode="decimal" placeholder="3300" className="tabular" />}
+                </Field>
+              </>
+            ) : (
+              <p className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2.5 text-[13px] text-muted-foreground">
+                <Lock className="size-4 shrink-0" aria-hidden /> Solo el dueño ve el CI y el sueldo.
+              </p>
+            )}
+          </div>
         </form>
         <div className="flex items-center gap-2 border-t px-6 py-4">
           {editing && editing.id !== me?.id && (

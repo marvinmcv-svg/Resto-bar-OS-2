@@ -8,6 +8,7 @@ import AdminPage from "@/app/(admin)/admin/page";
 import CreditosPage from "@/app/(admin)/creditos/page";
 import EquipoPage from "@/app/(admin)/equipo/page";
 import KitchenPage from "@/app/(pos)/cocina/page";
+import CajaPage from "@/app/(pos)/caja/page";
 import EntrarPage from "@/app/entrar/page";
 import MenuPage from "@/app/(admin)/menu/page";
 import ResumenPage from "@/app/(admin)/resumen/page";
@@ -21,6 +22,7 @@ function Screen() {
   if (mesa) return <Pos><OrderScreen key={mesa[1]} tableId={mesa[1]} /></Pos>;
   if (path === "/pos") return <Pos><FloorPage /></Pos>;
   if (path === "/cocina") return <Pos><KitchenPage /></Pos>;
+  if (path === "/caja") return <Pos><CajaPage /></Pos>;
   if (path === "/entrar") return <EntrarPage />;
   const pages: Record<string, () => React.ReactNode> = {
     "/admin": () => <AdminPage />,

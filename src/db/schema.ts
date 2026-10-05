@@ -2,7 +2,7 @@
 // Rules: tenant_id on every row, money in integer minor units (centavos),
 // client-generated UUIDs (offline), soft delete via deleted_at, append-only order_events.
 import {
-  pgTable, uuid, text, integer, bigint, timestamp, jsonb, pgEnum, boolean, unique, foreignKey,
+  pgTable, uuid, text, integer, bigint, timestamp, jsonb, pgEnum, boolean, unique, foreignKey, date,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
@@ -23,6 +23,8 @@ const timestamps = {
 export const roleEnum = pgEnum("member_role", ["owner", "manager", "cashier", "waiter", "bartender", "kitchen", "device"]);
 export const orderStatusEnum = pgEnum("order_status", ["open", "paid", "voided"]);
 export const paymentMethodEnum = pgEnum("payment_method", ["cash", "qr", "card_external", "transfer", "other"]);
+export const payTypeEnum = pgEnum("pay_type", ["monthly", "hourly", "per_shift"]);
+export const cashMovementKindEnum = pgEnum("cash_movement_kind", ["in", "out"]);
 export const invoiceStatusEnum = pgEnum("invoice_status", [
   "pending", "issued", "contingency", "failed", "cancel_requested", "cancelled",
 ]);
@@ -110,8 +112,11 @@ export const shifts = pgTable("shifts", {
   closedAt: timestamp("closed_at", { withTimezone: true }),
   openingCashMinor: bigint("opening_cash_minor", { mode: "number" }).notNull().default(0),
   countedCashMinor: bigint("counted_cash_minor", { mode: "number" }),
+  closedBy: uuid("closed_by"),
+  expectedCashMinor: bigint("expected_cash_minor", { mode: "number" }),
+  countBreakdown: jsonb("count_breakdown"), // denomination in centavos -> count
   ...timestamps,
-}, (t) => [sameTenantLocation(t)]);
+}, (t) => [sameTenantLocation(t), unique("shifts_tenant_id_key").on(t.tenantId, t.id)]);
 
 export const orders = pgTable("orders", {
   id: id(), // client-generated when offline
@@ -143,12 +148,16 @@ export const payments = pgTable("payments", {
   tenantId: tenantId(),
   locationId: locationId(),
   orderId: uuid("order_id").notNull(),
+  shiftId: uuid("shift_id"),
   method: paymentMethodEnum("method").notNull(),
   amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
   tipMinor: bigint("tip_minor", { mode: "number" }).notNull().default(0),
   reference: text("reference"),
   ...timestamps,
-}, (t) => [sameTenantLocation(t), sameTenantOrder(t)]);
+}, (t) => [
+  sameTenantLocation(t), sameTenantOrder(t),
+  foreignKey({ name: "payments_shift_fk", columns: [t.tenantId, t.shiftId], foreignColumns: [shifts.tenantId, shifts.id] }),
+]);
 
 export const invoices = pgTable("invoices", {
   id: id(),
@@ -164,3 +173,85 @@ export const invoices = pgTable("invoices", {
   raw: jsonb("raw"),
   ...timestamps,
 }, (t) => [sameTenantLocation(t), sameTenantOrder(t)]);
+
+// ---------- Cash register and daily HR (ADR-012) ----------
+
+const sameTenantShift = (t: { tenantId: AnyPgColumn; shiftId: AnyPgColumn }) =>
+  foreignKey({ columns: [t.tenantId, t.shiftId], foreignColumns: [shifts.tenantId, shifts.id] });
+const sameTenantStaff = (t: { tenantId: AnyPgColumn; staffId: AnyPgColumn }) =>
+  foreignKey({ columns: [t.tenantId, t.staffId], foreignColumns: [staff.tenantId, staff.id] });
+
+// Staff identify on paired devices with a PIN; stored hashed (ADR-010).
+export const staff = pgTable("staff", {
+  id: id(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  name: text("name").notNull(),
+  role: roleEnum("role").notNull(),
+  pinHash: text("pin_hash").notNull(),
+  active: boolean("active").notNull().default(true),
+  ...timestamps,
+}, (t) => [sameTenantLocation(t), unique().on(t.tenantId, t.id)]);
+
+// Personal and pay data: owner only (RLS).
+export const staffProfiles = pgTable("staff_profiles", {
+  staffId: uuid("staff_id").primaryKey(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  nationalId: text("national_id"), // CI
+  phone: text("phone"),
+  emergencyContact: text("emergency_contact"),
+  startedOn: date("started_on"),
+  payType: payTypeEnum("pay_type"),
+  payRateMinor: bigint("pay_rate_minor", { mode: "number" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [sameTenantLocation(t), sameTenantStaff(t)]);
+
+// Append-only drawer movements.
+export const cashMovements = pgTable("cash_movements", {
+  id: uuid("id").primaryKey(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  shiftId: uuid("shift_id").notNull(),
+  kind: cashMovementKindEnum("kind").notNull(),
+  amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+  reason: text("reason").notNull(),
+  note: text("note"),
+  createdBy: uuid("created_by").notNull(),
+  approvedBy: uuid("approved_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [sameTenantLocation(t), sameTenantShift(t)]);
+
+export const timeEntries = pgTable("time_entries", {
+  id: uuid("id").primaryKey(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  staffId: uuid("staff_id").notNull(),
+  inAt: timestamp("in_at", { withTimezone: true }).notNull(),
+  outAt: timestamp("out_at", { withTimezone: true }),
+  editedBy: uuid("edited_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [sameTenantLocation(t), sameTenantStaff(t)]);
+
+export const scheduleShifts = pgTable("schedule_shifts", {
+  id: uuid("id").primaryKey(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  staffId: uuid("staff_id").notNull(),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
+  ...timestamps,
+}, (t) => [sameTenantLocation(t), sameTenantStaff(t)]);
+
+export const tipDistributions = pgTable("tip_distributions", {
+  id: uuid("id").primaryKey(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  shiftId: uuid("shift_id").notNull(),
+  staffId: uuid("staff_id").notNull(),
+  amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+  method: text("method").notNull(), // 'equal' | 'hours'
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  createdBy: uuid("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [sameTenantLocation(t), sameTenantShift(t), sameTenantStaff(t)]);

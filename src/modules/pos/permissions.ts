@@ -11,16 +11,26 @@ export type Permission =
   | "order.take"
   | "order.void" // without asking for a manager PIN
   | "payment.record"
-  | "kds.view";
+  | "kds.view"
+  | "cash.manage" // open, move and close the cash register
+  | "hr.manage" // schedules, attendance, tips
+  | "hr.pay.view" // CI, pay type and rate (ADR-012)
+  | "time.clock"; // clock in and out
 
 const MATRIX: Record<Role, Permission[]> = {
   admin: ["tenants.manage", "reports.view", "menu.edit", "menu.86", "staff.manage", "kds.view"],
-  owner: ["reports.view", "menu.edit", "menu.86", "staff.manage", "order.take", "order.void", "payment.record", "kds.view"],
-  manager: ["reports.view", "menu.edit", "menu.86", "staff.manage", "order.take", "order.void", "payment.record", "kds.view"],
-  cashier: ["order.take", "payment.record"],
-  waiter: ["order.take"],
-  bartender: ["order.take", "menu.86", "kds.view"],
-  kitchen: ["menu.86", "kds.view"],
+  owner: [
+    "reports.view", "menu.edit", "menu.86", "staff.manage", "order.take", "order.void", "payment.record", "kds.view",
+    "cash.manage", "hr.manage", "hr.pay.view", "time.clock",
+  ],
+  manager: [
+    "reports.view", "menu.edit", "menu.86", "staff.manage", "order.take", "order.void", "payment.record", "kds.view",
+    "cash.manage", "hr.manage", "time.clock",
+  ],
+  cashier: ["order.take", "payment.record", "cash.manage", "time.clock"],
+  waiter: ["order.take", "time.clock"],
+  bartender: ["order.take", "menu.86", "kds.view", "time.clock"],
+  kitchen: ["menu.86", "kds.view", "time.clock"],
 };
 
 export const ROLES: Role[] = ["admin", "owner", "manager", "cashier", "waiter", "bartender", "kitchen"];
@@ -37,9 +47,9 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 export const ROLE_SUMMARY: Record<Role, string> = {
   admin: "Ve todos los restaurantes clientes, da de alta locales y da soporte.",
-  owner: "Todo su restaurante: ventas, menú, equipo, caja y anulaciones.",
-  manager: "Opera el turno: menú, equipo, anulaciones y cobros.",
-  cashier: "Cobra, toma pedidos y cierra caja. No cambia precios.",
+  owner: "Todo su restaurante: ventas, menú, equipo, sueldos, caja y anulaciones.",
+  manager: "Opera el turno: menú, horarios, anulaciones, caja y propinas. No ve sueldos.",
+  cashier: "Abre y cierra la caja, cobra y registra entradas y salidas de efectivo.",
   waiter: "Abre mesas y envía pedidos desde su celular. No cobra ni anula.",
   bartender: "Pedidos de barra, pantalla de barra y marca bebidas agotadas.",
   kitchen: "Pantalla de cocina: marca platos listos y agotados.",
@@ -55,6 +65,10 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   "order.void": "Anular sin pedir PIN de encargado",
   "payment.record": "Cobrar y registrar pagos",
   "kds.view": "Usar la pantalla de cocina/barra",
+  "cash.manage": "Abrir, mover y cerrar la caja",
+  "hr.manage": "Horarios, asistencia y propinas",
+  "hr.pay.view": "Ver CI, sueldos y datos personales",
+  "time.clock": "Marcar entrada y salida",
 };
 
 export const PERMISSIONS = Object.keys(PERMISSION_LABEL) as Permission[];
@@ -78,6 +92,7 @@ const ROUTES: [string, Permission][] = [
   ["/menu", "menu.edit"],
   ["/equipo", "staff.manage"],
   ["/cocina", "kds.view"],
+  ["/caja", "cash.manage"],
   ["/pos", "order.take"],
 ];
 
@@ -101,6 +116,8 @@ export function homeFor(role: Role): string {
       return "/resumen";
     case "kitchen":
       return "/cocina";
+    case "cashier":
+      return "/caja";
     default:
       return "/pos";
   }

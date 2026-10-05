@@ -41,4 +41,12 @@ describe("permissions", () => {
     expect(assignableRoles("waiter")).toEqual([]);
     expect(assignableRoles("admin")).toContain("owner");
   });
+
+  it("only the owner sees pay and ID data; the cashier runs the register", () => {
+    expect(ROLES.filter((r) => can(r, "hr.pay.view"))).toEqual(["owner"]);
+    expect(can("cashier", "cash.manage")).toBe(true);
+    expect(can("waiter", "cash.manage")).toBe(false);
+    expect(canAccess("waiter", "/caja")).toBe(false);
+    expect(homeFor("cashier")).toBe("/caja");
+  });
 });

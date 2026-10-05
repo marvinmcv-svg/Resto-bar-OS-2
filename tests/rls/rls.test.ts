@@ -8,6 +8,10 @@ const A = { tenant: "00000000-0000-0000-0000-00000000000a", user: "10000000-0000
 const B = { tenant: "00000000-0000-0000-0000-00000000000b", user: "10000000-0000-0000-0000-00000000000b", loc: "20000000-0000-0000-0000-00000000000b" };
 const WAITER_A = "10000000-0000-0000-0000-0000000000a1";
 const BARTENDER_A = "10000000-0000-0000-0000-0000000000a2";
+const CASHIER_A = "10000000-0000-0000-0000-0000000000a3";
+const MANAGER_A = "10000000-0000-0000-0000-0000000000a4";
+const SHIFT_A = "40000000-0000-0000-0000-00000000000a";
+const STAFF_A = "50000000-0000-0000-0000-00000000000a";
 const ORDER_A = "30000000-0000-0000-0000-00000000000a";
 
 let db: PGlite;
@@ -31,7 +35,7 @@ async function asUser(userId: string, sql: string, params: unknown[] = []) {
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(SUPABASE_SHIM);
-  for (const m of ["0001_core.sql", "0002_roles_menu.sql"]) {
+  for (const m of ["0001_core.sql", "0002_roles_menu.sql", "0003_cash_hr.sql"]) {
     await db.exec(readFileSync(join(__dirname, "../../supabase/migrations", m), "utf8"));
   }
   await db.exec(`
@@ -47,6 +51,18 @@ beforeAll(async () => {
   await db.query(`insert into memberships (tenant_id, user_id, role) values ($1, $2, 'waiter')`, [A.tenant, WAITER_A]);
   await db.query(`insert into memberships (tenant_id, user_id, role) values ($1, $2, 'bartender')`, [A.tenant, BARTENDER_A]);
   await db.query(`insert into platform_admins (user_id) values ($1)`, [A.user]);
+  await db.query(`insert into memberships (tenant_id, user_id, role) values ($1, $2, 'cashier')`, [A.tenant, CASHIER_A]);
+  await db.query(`insert into memberships (tenant_id, user_id, role) values ($1, $2, 'manager')`, [A.tenant, MANAGER_A]);
+  await db.query(`insert into shifts (id, tenant_id, location_id, opened_by, opening_cash_minor) values ($1, $2, $3, $4, 50000)`,
+    [SHIFT_A, A.tenant, A.loc, CASHIER_A]);
+  await db.query(`insert into staff (id, tenant_id, location_id, name, role, pin_hash) values ($1, $2, $3, 'Ana', 'waiter', 'x')`,
+    [STAFF_A, A.tenant, A.loc]);
+  await db.query(`insert into staff_profiles (staff_id, tenant_id, location_id, national_id, pay_type, pay_rate_minor)
+    values ($1, $2, $3, '1234567', 'monthly', 300000)`, [STAFF_A, A.tenant, A.loc]);
+  await db.query(`insert into cash_movements (id, tenant_id, location_id, shift_id, kind, amount_minor, reason, created_by)
+    values (gen_random_uuid(), $1, $2, $3, 'out', 12000, 'compra', $4)`, [A.tenant, A.loc, SHIFT_A, CASHIER_A]);
+  await db.query(`insert into time_entries (id, tenant_id, location_id, staff_id, in_at) values (gen_random_uuid(), $1, $2, $3, now())`,
+    [A.tenant, A.loc, STAFF_A]);
   await db.query(`insert into orders (id, tenant_id, location_id, total_minor) values ($1, $2, $3, 5000)`, [ORDER_A, A.tenant, A.loc]);
   await db.query(
     `insert into payments (tenant_id, location_id, order_id, method, amount_minor) values ($1, $2, $3, 'cash', 5000)`,
@@ -166,5 +182,54 @@ describe("Platform admins (ADR-011)", () => {
     await expect(
       asUser(B.user, "insert into platform_admins (user_id) values ($1)", [B.user]),
     ).rejects.toThrow(/row-level security/);
+  });
+});
+
+describe("Cash register and HR (ADR-012)", () => {
+  const movement = (user: string) =>
+    asUser(user,
+      `insert into cash_movements (id, tenant_id, location_id, shift_id, kind, amount_minor, reason, created_by)
+       values (gen_random_uuid(), $1, $2, $3, 'in', 500, 'cambio', $4) returning id`,
+      [A.tenant, A.loc, SHIFT_A, user]);
+
+  it("a cashier records cash movements; a waiter can't", async () => {
+    expect((await movement(CASHIER_A)).rows).toHaveLength(1);
+    await expect(movement(WAITER_A)).rejects.toThrow(/row-level security/);
+  });
+
+  it("nobody edits or deletes cash movements or clock-ins", async () => {
+    for (const user of [A.user, MANAGER_A, CASHIER_A]) {
+      expect((await asUser(user, "update cash_movements set amount_minor = 1")).affectedRows).toBe(0);
+      expect((await asUser(user, "delete from cash_movements")).affectedRows).toBe(0);
+      expect((await asUser(user, "delete from time_entries")).affectedRows).toBe(0);
+    }
+  });
+
+  it("only the owner sees personal and pay data", async () => {
+    expect((await asUser(A.user, "select pay_rate_minor from staff_profiles")).rows).toHaveLength(1);
+    for (const user of [MANAGER_A, CASHIER_A, WAITER_A]) {
+      expect((await asUser(user, "select * from staff_profiles")).rows).toHaveLength(0);
+    }
+    expect((await asUser(B.user, "select * from staff_profiles")).rows).toHaveLength(0);
+  });
+
+  it("staff clock out once through clock_out(); corrections need a manager's name on them", async () => {
+    // Direct edits by staff do nothing; clock_out() stamps the open entry once.
+    expect((await asUser(WAITER_A, "update time_entries set out_at = now()")).affectedRows).toBe(0);
+    const open = await asUser(WAITER_A, "select id from time_entries where out_at is null");
+    const entry = (open.rows[0] as { id: string }).id;
+    expect((await asUser(WAITER_A, "select public.clock_out($1) as ok", [entry])).rows).toEqual([{ ok: true }]);
+    expect((await asUser(WAITER_A, "select public.clock_out($1) as ok", [entry])).rows).toEqual([{ ok: false }]);
+    expect((await asUser(B.user, "select public.clock_out($1) as ok", [entry])).rows).toEqual([{ ok: false }]);
+    await expect(asUser(MANAGER_A, "update time_entries set in_at = now() - interval '1 hour'")).rejects.toThrow(/row-level security/);
+    const fixed = await asUser(MANAGER_A, "update time_entries set in_at = now() - interval '1 hour', edited_by = $1", [MANAGER_A]);
+    expect(fixed.affectedRows).toBe(1);
+  });
+
+  it("a payment can't point at another tenant's shift", async () => {
+    await expect(
+      db.query(`insert into payments (tenant_id, location_id, order_id, shift_id, method, amount_minor)
+        select $1, $2, id, $3, 'cash', 1 from orders where tenant_id = $1 limit 1`, [B.tenant, B.loc, SHIFT_A]),
+    ).rejects.toThrow(/foreign key/);
   });
 });

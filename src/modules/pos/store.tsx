@@ -8,11 +8,18 @@ import {
   type ClientRestaurant, type HistoricOrder, type VoidRecord,
 } from "./demo-data";
 import { balanceMinor, lineTotalMinor, orderTotalMinor } from "./order";
+import { openShift } from "./cash";
+import {
+  PROFILES, seedLastNightShift, seedSchedule, seedTimeEntries,
+  type ClosedCashShift, type StaffProfile, type TipSplit,
+} from "../hr/demo-hr";
+import type { ScheduleShift, TimeEntry } from "../hr/time";
 import type {
-  Category, ChosenModifier, GuestNote, MenuItem, Order, Payment, PaymentMethod, ShiftNote, Staff, WaitlistEntry,
+  CashMovement, Category, ChosenModifier, GuestNote, MenuItem, Order, Payment, PaymentMethod, PaymentRecord, ShiftNote, Staff,
+  WaitlistEntry,
 } from "./types";
 
-const STORAGE_KEY = "restobar-demo-v2";
+const STORAGE_KEY = "restobar-demo-v3";
 
 export interface State {
   live: Order[];
@@ -27,12 +34,21 @@ export interface State {
   /** Who is using this device. null = signed out (shows /entrar). */
   sessionStaffId: string | null;
   staffId: string; // last signed-in staff; orders opened on this device belong to them
+  /** When this demo day was seeded; a new day reseeds the service. */
   shiftOpenedAt: number;
-  openingCashMinor: number;
   shiftNote: ShiftNote | null;
   shiftNoteSeenBy: string[];
   tableNotes: Record<string, GuestNote>;
   waitlist: WaitlistEntry[];
+  /** Cash-register shifts; the open one has no closedAt. */
+  cashShifts: ClosedCashShift[];
+  cashMovements: CashMovement[];
+  /** Every charge, linked to its register shift. */
+  payments: PaymentRecord[];
+  profiles: Record<string, StaffProfile>;
+  schedule: ScheduleShift[];
+  timeEntries: TimeEntry[];
+  tipSplits: TipSplit[];
 }
 
 type Action =
@@ -62,6 +78,18 @@ type Action =
   | { type: "removeWaitlist"; id: string }
   | { type: "kdsAdvance"; orderId: string; lineIds: string[]; at: number }
   | { type: "kdsRecall"; orderId: string; lineIds: string[] }
+  | { type: "openRegister"; shift: ClosedCashShift }
+  | { type: "addCashMovement"; movement: CashMovement }
+  | { type: "closeRegister"; shiftId: string; patch: Pick<ClosedCashShift, "closedAt" | "closedBy" | "countedMinor" | "count" | "expectedMinor" | "summary"> }
+  | { type: "clockIn"; entry: TimeEntry }
+  | { type: "clockOut"; entryId: string; at: number }
+  | { type: "correctEntry"; entryId: string; inAt: number; outAt?: number; editedBy: string }
+  | { type: "upsertSchedule"; shift: ScheduleShift }
+  | { type: "removeSchedule"; id: string }
+  | { type: "replaceWeek"; weekStart: string; shifts: ScheduleShift[] }
+  | { type: "saveTipSplit"; split: TipSplit }
+  | { type: "markTipPaid"; splitId: string; staffId: string; at: number }
+  | { type: "upsertProfile"; staffId: string; profile: StaffProfile }
   | { type: "replace"; state: State };
 
 /** Seeded tickets look like a real rush: old ones served, recent ones on the line. */
@@ -78,9 +106,27 @@ function withKitchenProgress(orders: Order[], now: number): Order[] {
   }));
 }
 
+/** Today's register: opened 11:30 with Bs 500; today's closed orders are its payments. */
+function seedCash(now: number, history: HistoricOrder[]): Pick<State, "cashShifts" | "cashMovements" | "payments"> {
+  const day = (h: number, m: number) => new Date(new Date(now).setHours(h, m, 0, 0)).getTime();
+  const shiftId = "shift-today";
+  return {
+    cashShifts: [seedLastNightShift(new Date(now)), { id: shiftId, openedBy: "s-carla", openedAt: day(11, 30), openingMinor: 50000 }],
+    cashMovements: [
+      { id: "cm-1", shiftId, kind: "out", amountMinor: 12000, reason: "compra", note: "Hielo y limones", at: day(12, 40), by: "s-carla", approvedBy: "s-daniela" },
+      { id: "cm-2", shiftId, kind: "in", amountMinor: 20000, reason: "cambio", note: "Cambio del banco", at: day(13, 5), by: "s-carla" },
+    ],
+    payments: history.filter((o) => o.closedAt <= now).map((o) => ({
+      id: `p-${o.id}`, shiftId, orderId: o.id, tableId: "", method: o.method, amountMinor: o.totalMinor, tipMinor: o.tipMinor, at: o.closedAt,
+      by: "s-carla",
+    })),
+  };
+}
+
 function seed(): State {
   const now = Date.now();
   const h = seedHistory(new Date(now));
+  const schedule = seedSchedule(new Date(now));
   return {
     live: withKitchenProgress(seedLiveOrders(now), now),
     history: h.orders,
@@ -94,7 +140,11 @@ function seed(): State {
     sessionStaffId: null,
     staffId: "s-carla",
     shiftOpenedAt: new Date(new Date(now).setHours(11, 30, 0, 0)).getTime(),
-    openingCashMinor: 50000,
+    ...seedCash(now, h.orders),
+    profiles: PROFILES,
+    schedule,
+    timeEntries: seedTimeEntries(schedule, now),
+    tipSplits: [],
     shiftNote: {
       text: "Mesa 7 reservada 21:00 (cumpleaños, 8 pers.). Recomendar Chuflay con Rujero. Helado agotado.",
       by: "s-daniela",
@@ -171,6 +221,11 @@ function reducer(state: State, a: Action): State {
     case "pay": {
       const order = state.live.find((o) => o.id === a.orderId);
       if (!order) return state;
+      const record: PaymentRecord = {
+        id: a.payment.id, shiftId: openShift(state.cashShifts)?.id ?? null, orderId: order.id, tableId: order.tableId,
+        method: a.payment.method, amountMinor: a.payment.amountMinor, tipMinor: a.payment.tipMinor, at: a.payment.at, by: a.payment.by,
+      };
+      state = { ...state, payments: [...state.payments, record] };
       const updated: Order = { ...order, payments: [...order.payments, a.payment] };
       if (balanceMinor(updated) > 0) return mapOrder(state, a.orderId, () => updated);
       // Fully paid: archive into today's history and free the table.
@@ -259,6 +314,54 @@ function reducer(state: State, a: Action): State {
           return l.startedAt ? { ...l, readyAt: a.at } : { ...l, startedAt: a.at };
         }),
       }));
+    case "openRegister":
+      return openShift(state.cashShifts) ? state : { ...state, cashShifts: [...state.cashShifts, a.shift] };
+    case "addCashMovement":
+      return { ...state, cashMovements: [...state.cashMovements, a.movement] };
+    case "closeRegister":
+      return { ...state, cashShifts: state.cashShifts.map((s) => (s.id === a.shiftId && !s.closedAt ? { ...s, ...a.patch } : s)) };
+    case "clockIn":
+      return state.timeEntries.some((e) => e.staffId === a.entry.staffId && !e.outAt)
+        ? state
+        : { ...state, timeEntries: [...state.timeEntries, a.entry] };
+    case "clockOut":
+      return { ...state, timeEntries: state.timeEntries.map((e) => (e.id === a.entryId && !e.outAt ? { ...e, outAt: a.at } : e)) };
+    case "correctEntry":
+      return {
+        ...state,
+        timeEntries: state.timeEntries.map((e) => (e.id === a.entryId ? { ...e, inAt: a.inAt, outAt: a.outAt, editedBy: a.editedBy } : e)),
+      };
+    case "upsertSchedule":
+      return {
+        ...state,
+        schedule: state.schedule.some((s) => s.id === a.shift.id)
+          ? state.schedule.map((s) => (s.id === a.shift.id ? a.shift : s))
+          : [...state.schedule, a.shift],
+      };
+    case "removeSchedule":
+      return { ...state, schedule: state.schedule.filter((s) => s.id !== a.id) };
+    case "replaceWeek": {
+      const [y, m, d] = a.weekStart.split("-").map(Number);
+      const from = new Date(y, m - 1, d).getTime();
+      const to = from + 7 * 24 * 3600_000;
+      const inWeek = (s: ScheduleShift) => {
+        const [yy, mm, dd] = s.date.split("-").map(Number);
+        const t = new Date(yy, mm - 1, dd).getTime();
+        return t >= from && t < to;
+      };
+      return { ...state, schedule: [...state.schedule.filter((s) => !inWeek(s)), ...a.shifts] };
+    }
+    case "saveTipSplit":
+      return { ...state, tipSplits: [...state.tipSplits.filter((t) => t.shiftId !== a.split.shiftId), a.split] };
+    case "markTipPaid":
+      return {
+        ...state,
+        tipSplits: state.tipSplits.map((t) =>
+          t.id === a.splitId ? { ...t, shares: t.shares.map((x) => (x.staffId === a.staffId ? { ...x, paidAt: a.at } : x)) } : t,
+        ),
+      };
+    case "upsertProfile":
+      return { ...state, profiles: { ...state.profiles, [a.staffId]: a.profile } };
     case "kdsRecall":
       return mapOrder(state, a.orderId, (o) => ({
         ...o,
@@ -281,6 +384,10 @@ interface StoreValue {
   categoryById: (id: string) => Category | undefined;
   /** Items on sale (not archived), in menu order. */
   activeMenu: MenuItem[];
+  /** The open cash-register shift, if any. */
+  register: ClosedCashShift | undefined;
+  /** The signed-in person's open clock-in, if any. */
+  myClockIn: TimeEntry | undefined;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -302,7 +409,10 @@ export function StoreProvider({ children, fallback }: { children: ReactNode; fal
     const next = fresh
       ? loaded!
       : loaded
-        ? { ...seed(), menu: loaded.menu, categories: loaded.categories, staff: loaded.staff, clients: loaded.clients, sessionStaffId: loaded.sessionStaffId }
+        ? {
+            ...seed(), menu: loaded.menu, categories: loaded.categories, staff: loaded.staff, clients: loaded.clients,
+            sessionStaffId: loaded.sessionStaffId, profiles: loaded.profiles,
+          }
         : seed();
     dispatch({ type: "replace", state: next });
     setReady(true);
@@ -343,6 +453,8 @@ export function StoreProvider({ children, fallback }: { children: ReactNode; fal
       staffById: (id) => state.staff.find((s) => s.id === id),
       categoryById: (id) => state.categories.find((c) => c.id === id),
       activeMenu: state.menu.filter((m) => !m.archived),
+      register: openShift(state.cashShifts),
+      myClockIn: state.sessionStaffId ? state.timeEntries.find((e) => e.staffId === state.sessionStaffId && !e.outAt) : undefined,
     };
   }, [state, ready, reset]);
 

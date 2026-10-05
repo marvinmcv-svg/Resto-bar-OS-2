@@ -17,6 +17,7 @@ import { RESTAURANT, TABLES } from "@/modules/pos/demo-data";
 import { formatBs, formatBsShort } from "@/modules/pos/money";
 import { orderTotalMinor } from "@/modules/pos/order";
 import { useNow, useStore } from "@/modules/pos/store";
+import { cashDifference, expectedCashMinor } from "@/modules/pos/cash";
 import { tableStatus, type TableStatus } from "@/modules/pos/table-status";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +32,7 @@ function greeting(h: number) {
 }
 
 export default function ResumenPage() {
-  const { state, itemById, staffById, me } = useStore();
+  const { state, itemById, staffById, me, register } = useStore();
   const now = useNow();
   const date = new Date(now);
   const weekday = date.toLocaleDateString("es-BO", { weekday: "long" });
@@ -83,8 +84,12 @@ export default function ResumenPage() {
   }));
 
   const voidTotal = state.voids.reduce((s, v) => s + v.amountMinor, 0);
-  const cashSales = mix.find((m) => m.key === "cash")?.valueMinor ?? 0;
-  const expectedCash = state.openingCashMinor + cashSales;
+  const lastClose = [...state.cashShifts].filter((x) => x.closedAt).sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0))[0];
+  const expectedCash = register ? expectedCashMinor(register, state.payments, state.cashMovements) : (lastClose?.countedMinor ?? 0);
+  const lastDiff =
+    lastClose?.countedMinor !== undefined && lastClose.expectedMinor !== undefined
+      ? cashDifference(lastClose.countedMinor, lastClose.expectedMinor)
+      : null;
 
   const live = state.live.filter((o) => o.lines.length > 0);
   const liveTotal = live.reduce((s, o) => s + orderTotalMinor(o), 0);
@@ -269,9 +274,26 @@ export default function ResumenPage() {
                 </li>
               ))}
           </ul>
-          <div className="mt-2 flex items-center justify-between border-t pt-4 text-[13px]">
-            <span className="text-muted-foreground">Efectivo esperado en caja</span>
-            <span className="font-semibold tabular">{formatBs(expectedCash)}</span>
+          <div className="mt-2 space-y-2 border-t pt-4 text-[13px]">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">{register ? "Efectivo esperado en caja" : "Caja cerrada · contado"}</span>
+              <span className="font-semibold tabular">{formatBs(expectedCash)}</span>
+            </div>
+            {lastClose && lastDiff && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  Último cierre · {staffById(lastClose.closedBy ?? "")?.name}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 font-semibold tabular",
+                    lastDiff.flagged ? "bg-status-critical/12 text-status-critical" : "bg-status-good/14 text-status-good-ink",
+                  )}
+                >
+                  {lastDiff.status === "ok" ? "Cuadró" : `${lastDiff.status === "over" ? "Sobró" : "Faltó"} ${formatBs(Math.abs(lastDiff.diffMinor))}`}
+                </span>
+              </div>
+            )}
           </div>
         </Panel>
 

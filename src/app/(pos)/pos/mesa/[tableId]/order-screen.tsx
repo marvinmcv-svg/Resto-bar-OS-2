@@ -13,18 +13,20 @@ import { PosHeader } from "@/components/pos/pos-header";
 import { StatusBadge } from "@/components/pos/status-badge";
 import { TicketPanel } from "@/components/pos/ticket-panel";
 import { VoidDialog } from "@/components/pos/void-dialog";
+import { usePay } from "@/components/pos/use-pay";
 import { GuestNoteDialog } from "@/components/pos/guest-note-dialog";
 import { can } from "@/modules/pos/permissions";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { formatBs } from "@/modules/pos/money";
-import { balanceMinor, itemCount, orderTotalMinor, suggestUpsell, unsentLines } from "@/modules/pos/order";
+import { itemCount, orderTotalMinor, suggestUpsell, unsentLines } from "@/modules/pos/order";
 import { tableById, useNow, useStore } from "@/modules/pos/store";
 import { tableStatus } from "@/modules/pos/table-status";
 import type { ChosenModifier, MenuItem, OrderLine } from "@/modules/pos/types";
 import { cn } from "@/lib/utils";
 
 export function OrderScreen({ tableId }: { tableId: string }) {
-  const { state, dispatch, orderForTable, verifyManagerPin, staffById, activeMenu, me } = useStore();
+  const { state, dispatch, orderForTable, verifyManagerPin, staffById, activeMenu, me, register } = useStore();
+  const payOrder = usePay();
   const router = useRouter();
   const now = useNow(15000);
   const table = tableById(tableId);
@@ -75,21 +77,9 @@ export function OrderScreen({ tableId }: { tableId: string }) {
   if (!order || !table) return null;
 
   const pay = (r: CheckoutResult) => {
-    const remaining = balanceMinor(order) - r.amountMinor;
-    dispatch({
-      type: "pay",
-      orderId: order.id,
-      payment: { id: crypto.randomUUID(), method: r.method, amountMinor: r.amountMinor, tipMinor: r.tipMinor, at: Date.now(), by: state.staffId },
-    });
+    const remaining = payOrder(order, table.label, r);
     setCheckout(false);
-    if (remaining > 0) {
-      toast.success(`Cobrado ${formatBs(r.amountMinor + r.tipMinor)}`, { description: `Falta ${formatBs(remaining)}` });
-    } else {
-      toast.success(`Mesa ${table.label} cobrada`, {
-        description: r.nit ? `Factura para NIT ${r.nit} en cola para el SIN` : "Factura en cola para el SIN",
-      });
-      router.push("/pos");
-    }
+    if (remaining <= 0) router.push("/pos");
   };
 
   const send = () => {
@@ -267,7 +257,14 @@ export function OrderScreen({ tableId }: { tableId: string }) {
           setNoteOpen(false);
         }}
       />
-      <CheckoutDialog order={order} tableLabel={table.label} open={checkout} onClose={() => setCheckout(false)} onPay={pay} />
+      <CheckoutDialog
+        order={order}
+        tableLabel={table.label}
+        open={checkout}
+        onClose={() => setCheckout(false)}
+        onPay={pay}
+        cashAllowed={!!register}
+      />
     </div>
   );
 }
