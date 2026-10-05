@@ -1,0 +1,9 @@
+{
+  "name": "restobar-os-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "npx --yes hyperframes@0.8.133 check",
+    "render": "npx --yes hyperframes@0.8.133 render -o ../public/landing/demo.mp4 --quality delivery"
+  }
+}

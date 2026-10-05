@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 const STYLE: Record<TableStatus, { icon: typeof Circle; className: string }> = {
   free: { icon: Circle, className: "text-muted-foreground bg-muted" },
   occupied: { icon: CircleDot, className: "text-status-info bg-status-info/12" },
-  bill: { icon: Receipt, className: "text-[#a86b00] bg-status-warning/18 dark:text-status-warning" },
+  bill: { icon: Receipt, className: "text-status-warning-ink bg-status-warning/18" },
   late: { icon: AlarmClock, className: "text-status-critical bg-status-critical/12" },
 };
 

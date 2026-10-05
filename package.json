@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "db:generate": "drizzle-kit generate",
-    "build:panel": "node demo/build.mjs"
+    "build:panel": "node demo/build.mjs",
+    "video:shots": "node scripts/capture-shots.mjs",
+    "video:render": "node scripts/render-video.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

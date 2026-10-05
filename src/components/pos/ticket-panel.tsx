@@ -1,11 +1,11 @@
 "use client";
 
-import { ChefHat, Minus, Plus, Receipt, Send, Trash2, Undo2 } from "lucide-react";
+import { BellRing, Cake, ChefHat, CircleCheck, Flame, Heart, Minus, NotebookPen, Plus, Receipt, Send, Sparkles, Star, Trash2, TriangleAlert, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatBs } from "@/modules/pos/money";
-import { itemById } from "@/modules/pos/store";
-import { activeLines, balanceMinor, itemCount, lineTotalMinor, orderTotalMinor, paidMinor, unsentLines } from "@/modules/pos/order";
-import type { Order, OrderLine } from "@/modules/pos/types";
+import { useStore } from "@/modules/pos/store";
+import { activeLines, balanceMinor, itemCount, lineTotalMinor, orderTotalMinor, paidMinor, unsentLines, type Upsell } from "@/modules/pos/order";
+import type { GuestNote, Order, OrderLine } from "@/modules/pos/types";
 import { cn } from "@/lib/utils";
 import { ItemImage } from "./item-image";
 
@@ -18,6 +18,7 @@ function Line({
   onVoid?: () => void;
 }) {
   const mods = [...line.modifiers.map((m) => m.name), line.note && `“${line.note}”`].filter(Boolean).join(" · ");
+  const { itemById } = useStore();
   const item = itemById(line.itemId);
   return (
     <li className={cn("group flex gap-3 py-3", line.voided && "opacity-50")}>
@@ -38,6 +39,16 @@ function Line({
         </div>
         {mods && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{mods}</p>}
         {line.voided && <p className="mt-0.5 text-[12.5px] text-status-critical">Anulado · {line.voided.reason}</p>}
+        {!line.voided && line.readyAt && (
+          <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-status-good/14 px-2 py-0.5 text-[11.5px] font-semibold text-status-good-ink">
+            <BellRing className="size-3" aria-hidden /> Listo para servir
+          </p>
+        )}
+        {!line.voided && !line.readyAt && line.startedAt && (
+          <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-status-info/12 px-2 py-0.5 text-[11.5px] font-semibold text-status-info">
+            <Flame className="size-3" aria-hidden /> Preparando
+          </p>
+        )}
         {onQty && (
           <div className="mt-2 flex items-center gap-1.5">
             <Button variant="secondary" size="icon-sm" aria-label="Menos" onClick={() => (line.qty > 1 ? onQty(line.qty - 1) : onRemove?.())}>
@@ -64,8 +75,16 @@ function Line({
   );
 }
 
+export const OCCASION: Record<NonNullable<GuestNote["occasion"]>, { label: string; icon: typeof Cake }> = {
+  cumpleanos: { label: "Cumpleaños", icon: Cake },
+  aniversario: { label: "Aniversario", icon: Heart },
+  alergia: { label: "Alergia", icon: TriangleAlert },
+  vip: { label: "Cliente frecuente", icon: Star },
+};
+
 export function TicketPanel({
   order, tableLabel, waiter, onQty, onRemove, onVoid, onSend, onToggleBill, onCheckout,
+  canCharge, upsell, onUpsell, guestNote, onEditNote,
 }: {
   order: Order;
   tableLabel: string;
@@ -76,6 +95,11 @@ export function TicketPanel({
   onSend: () => void;
   onToggleBill: () => void;
   onCheckout: () => void;
+  canCharge: boolean;
+  upsell?: Upsell | null;
+  onUpsell?: (u: Upsell) => void;
+  guestNote?: GuestNote;
+  onEditNote?: () => void;
 }) {
   const pending = unsentLines(order);
   const sent = order.lines.filter((l) => l.sentAt);
@@ -91,6 +115,7 @@ export function TicketPanel({
             {waiter} · {order.guests} pers. · {itemCount(order)} ítems
           </p>
         </div>
+        {canCharge && (
         <Button
           variant={order.billRequested ? "default" : "secondary"}
           size="sm"
@@ -100,7 +125,35 @@ export function TicketPanel({
         >
           <Receipt /> {order.billRequested ? "Pidió la cuenta" : "Pide la cuenta"}
         </Button>
+        )}
       </div>
+
+      {guestNote ? (
+        <button
+          onClick={onEditNote}
+          className="press mx-5 mb-2 flex items-start gap-2.5 rounded-[14px] border border-primary/30 bg-primary/10 px-3 py-2.5 text-left"
+        >
+          {(() => {
+            const Icon = guestNote.occasion ? OCCASION[guestNote.occasion].icon : NotebookPen;
+            return <Icon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />;
+          })()}
+          <span className="min-w-0 text-[13px] leading-snug">
+            <span className="font-semibold">
+              {[guestNote.name, guestNote.occasion && OCCASION[guestNote.occasion].label].filter(Boolean).join(" · ") || "Nota"}
+            </span>
+            {guestNote.text && <span className="block text-muted-foreground">{guestNote.text}</span>}
+          </span>
+        </button>
+      ) : (
+        onEditNote && (
+          <button
+            onClick={onEditNote}
+            className="press mx-5 mb-2 flex h-9 items-center gap-2 rounded-[12px] px-2 text-[13px] font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <NotebookPen className="size-4" aria-hidden /> Nota del cliente (ocasión, alergias)
+          </button>
+        )
+      )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5">
         {order.lines.length === 0 && (
@@ -134,6 +187,25 @@ export function TicketPanel({
       </div>
 
       <div className="space-y-3 border-t p-5">
+        {upsell && onUpsell && (
+          <button
+            onClick={() => onUpsell(upsell)}
+            className="press flex w-full items-center gap-3 rounded-[16px] border border-dashed border-primary/45 bg-primary/8 p-2.5 text-left hover:bg-primary/12"
+            aria-label={`Sugerencia: agregar ${upsell.item.name}, ${formatBs(upsell.item.priceMinor)}`}
+          >
+            <ItemImage item={upsell.item} className="size-10 shrink-0 rounded-[10px]" sizes="40px" />
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-1 text-[11px] font-semibold tracking-wide text-primary uppercase">
+                <Sparkles className="size-3" aria-hidden /> Sugerencia
+              </span>
+              <span className="block truncate text-[13.5px] font-semibold">¿Agregar {upsell.item.name}?</span>
+              <span className="block truncate text-[12px] text-muted-foreground">{upsell.reason}</span>
+            </span>
+            <span className="shrink-0 rounded-full bg-primary px-2.5 py-1 text-[12px] font-semibold text-primary-foreground tabular">
+              +{formatBs(upsell.item.priceMinor)}
+            </span>
+          </button>
+        )}
         {paid > 0 && (
           <div className="flex justify-between text-[13px] text-muted-foreground">
             <span>Pagado</span>
@@ -153,10 +225,28 @@ export function TicketPanel({
           <Button size="xl" className="w-full" onClick={onSend}>
             <Send /> Enviar a cocina ({pending.reduce((s, l) => s + l.qty, 0)})
           </Button>
-        ) : (
+        ) : canCharge ? (
           <Button size="xl" className="w-full justify-between" disabled={activeLines(order).length === 0} onClick={onCheckout}>
             <span>Cobrar</span>
             <span className="tabular">{formatBs(paid > 0 ? balanceMinor(order) : total)}</span>
+          </Button>
+        ) : (
+          <Button
+            size="xl"
+            variant={order.billRequested ? "secondary" : "default"}
+            className="w-full"
+            disabled={activeLines(order).length === 0}
+            onClick={onToggleBill}
+          >
+            {order.billRequested ? (
+              <>
+                <CircleCheck /> Caja avisada · la cuenta va en camino
+              </>
+            ) : (
+              <>
+                <Receipt /> Pedir la cuenta a caja
+              </>
+            )}
           </Button>
         )}
       </div>

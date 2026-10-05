@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { signIn } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/pos");
-  await page.evaluate(() => localStorage.clear());
-  await page.reload();
+  // Carla (cashier) takes orders and charges, but voids need a manager PIN.
+  await signIn(page, "Carla", { fresh: true });
+  await expect(page).toHaveURL(/\/pos$/);
 });
 
 test("open a table, order, send, void with PIN, and charge", async ({ page }) => {
@@ -47,11 +48,13 @@ test("open a table, order, send, void with PIN, and charge", async ({ page }) =>
   // Back on the floor, table 1 is free again; the owner sees the void.
   await expect(page).toHaveURL(/\/pos$/);
   await expect(page.getByRole("button", { name: /Mesa 1, Libre/ })).toBeVisible();
-  await page.goto("/resumen");
+  await signIn(page, "Daniela");
+  await expect(page).toHaveURL(/\/resumen$/);
   await expect(page.getByText(/3 anulaciones/).first()).toBeVisible();
 });
 
 test("sold-out items are disabled in the POS", async ({ page }) => {
+  await signIn(page, "Daniela");
   await page.goto("/menu");
   await page.getByRole("switch", { name: "Salteña de carne disponible" }).click();
   await page.goto("/pos/mesa/m2");

@@ -3,11 +3,16 @@
 // Client-side demo store. Real deployments replace this with Supabase + order_events (ADR-005);
 // the action names mirror the domain events so the swap is mechanical.
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from "react";
-import { MENU, seedHistory, seedLiveOrders, STAFF, TABLES, type HistoricOrder, type VoidRecord } from "./demo-data";
+import {
+  CATEGORIES, CLIENTS, MENU, seedHistory, seedLiveOrders, STAFF, TABLES,
+  type ClientRestaurant, type HistoricOrder, type VoidRecord,
+} from "./demo-data";
 import { balanceMinor, lineTotalMinor, orderTotalMinor } from "./order";
-import type { ChosenModifier, MenuItem, Order, Payment, PaymentMethod } from "./types";
+import type {
+  Category, ChosenModifier, GuestNote, MenuItem, Order, Payment, PaymentMethod, ShiftNote, Staff, WaitlistEntry,
+} from "./types";
 
-const STORAGE_KEY = "restobar-demo-v1";
+const STORAGE_KEY = "restobar-demo-v2";
 
 export interface State {
   live: Order[];
@@ -15,9 +20,19 @@ export interface State {
   voids: VoidRecord[];
   lastWeekTotalMinor: number;
   unavailable: string[]; // item ids marked "agotado"
-  staffId: string;
+  menu: MenuItem[];
+  categories: Category[];
+  staff: Staff[];
+  clients: ClientRestaurant[];
+  /** Who is using this device. null = signed out (shows /entrar). */
+  sessionStaffId: string | null;
+  staffId: string; // last signed-in staff; orders opened on this device belong to them
   shiftOpenedAt: number;
   openingCashMinor: number;
+  shiftNote: ShiftNote | null;
+  shiftNoteSeenBy: string[];
+  tableNotes: Record<string, GuestNote>;
+  waitlist: WaitlistEntry[];
 }
 
 type Action =
@@ -32,20 +47,65 @@ type Action =
   | { type: "cancelEmpty"; orderId: string }
   | { type: "toggleAvailable"; itemId: string }
   | { type: "setStaff"; staffId: string }
+  | { type: "signIn"; staffId: string }
+  | { type: "signOut" }
+  | { type: "upsertItem"; item: MenuItem }
+  | { type: "archiveItem"; itemId: string; archived: boolean }
+  | { type: "upsertCategory"; category: Category }
+  | { type: "upsertStaff"; staff: Staff }
+  | { type: "setStaffActive"; staffId: string; active: boolean }
+  | { type: "addClient"; client: ClientRestaurant }
+  | { type: "setShiftNote"; note: ShiftNote | null }
+  | { type: "seenShiftNote"; staffId: string }
+  | { type: "setTableNote"; tableId: string; note: GuestNote | null }
+  | { type: "addWaitlist"; entry: WaitlistEntry }
+  | { type: "removeWaitlist"; id: string }
+  | { type: "kdsAdvance"; orderId: string; lineIds: string[]; at: number }
+  | { type: "kdsRecall"; orderId: string; lineIds: string[] }
   | { type: "replace"; state: State };
+
+/** Seeded tickets look like a real rush: old ones served, recent ones on the line. */
+function withKitchenProgress(orders: Order[], now: number): Order[] {
+  return orders.map((o) => ({
+    ...o,
+    lines: o.lines.map((l) => {
+      if (!l.sentAt) return l;
+      const age = (now - l.sentAt) / 60000;
+      if (age > 16) return { ...l, startedAt: l.sentAt + 2 * 60000, readyAt: l.sentAt + 12 * 60000 };
+      if (age > 5) return { ...l, startedAt: l.sentAt + 2 * 60000 };
+      return l;
+    }),
+  }));
+}
 
 function seed(): State {
   const now = Date.now();
   const h = seedHistory(new Date(now));
   return {
-    live: seedLiveOrders(now),
+    live: withKitchenProgress(seedLiveOrders(now), now),
     history: h.orders,
     voids: h.voids,
     lastWeekTotalMinor: h.lastWeekTotalMinor,
     unavailable: ["helado"],
+    menu: MENU,
+    categories: CATEGORIES,
+    staff: STAFF,
+    clients: CLIENTS,
+    sessionStaffId: null,
     staffId: "s-carla",
     shiftOpenedAt: new Date(new Date(now).setHours(11, 30, 0, 0)).getTime(),
     openingCashMinor: 50000,
+    shiftNote: {
+      text: "Mesa 7 reservada 21:00 (cumpleaños, 8 pers.). Recomendar Chuflay con Rujero. Helado agotado.",
+      by: "s-daniela",
+      at: new Date(new Date(now).setHours(11, 20, 0, 0)).getTime(),
+    },
+    shiftNoteSeenBy: [],
+    tableNotes: { m7: { name: "Familia Rojas", occasion: "cumpleanos", text: "Torta propia, traer velas" } },
+    waitlist: [
+      { id: "w1", name: "Gabriela", party: 4, addedAt: now - 12 * 60000, quotedMin: 20 },
+      { id: "w2", name: "Andrés", party: 2, addedAt: now - 4 * 60000, quotedMin: 10 },
+    ],
   };
 }
 
@@ -126,7 +186,9 @@ function reducer(state: State, a: Action): State {
         items: updated.lines.filter((l) => !l.voided).map((l) => ({ itemId: l.itemId, qty: l.qty, totalMinor: lineTotalMinor(l) })),
         waiterId: updated.waiterId,
       };
-      return { ...state, live: state.live.filter((o) => o.id !== a.orderId), history: [...state.history, hist] };
+      const tableNotes = { ...state.tableNotes };
+      delete tableNotes[order.tableId];
+      return { ...state, live: state.live.filter((o) => o.id !== a.orderId), history: [...state.history, hist], tableNotes };
     }
     case "cancelEmpty":
       return { ...state, live: state.live.filter((o) => !(o.id === a.orderId && o.lines.length === 0)) };
@@ -139,6 +201,69 @@ function reducer(state: State, a: Action): State {
       };
     case "setStaff":
       return { ...state, staffId: a.staffId };
+    case "signIn":
+      return { ...state, sessionStaffId: a.staffId, staffId: a.staffId };
+    case "signOut":
+      return { ...state, sessionStaffId: null };
+    case "upsertItem":
+      return {
+        ...state,
+        menu: state.menu.some((m) => m.id === a.item.id)
+          ? state.menu.map((m) => (m.id === a.item.id ? a.item : m))
+          : [...state.menu, a.item],
+      };
+    case "archiveItem":
+      return { ...state, menu: state.menu.map((m) => (m.id === a.itemId ? { ...m, archived: a.archived } : m)) };
+    case "upsertCategory":
+      return {
+        ...state,
+        categories: state.categories.some((c) => c.id === a.category.id)
+          ? state.categories.map((c) => (c.id === a.category.id ? a.category : c))
+          : [...state.categories, a.category],
+      };
+    case "upsertStaff":
+      return {
+        ...state,
+        staff: state.staff.some((x) => x.id === a.staff.id)
+          ? state.staff.map((x) => (x.id === a.staff.id ? a.staff : x))
+          : [...state.staff, a.staff],
+      };
+    case "setStaffActive":
+      return {
+        ...state,
+        staff: state.staff.map((x) => (x.id === a.staffId ? { ...x, active: a.active } : x)),
+        sessionStaffId: !a.active && state.sessionStaffId === a.staffId ? null : state.sessionStaffId,
+      };
+    case "addClient":
+      return { ...state, clients: [...state.clients, a.client] };
+    case "setShiftNote":
+      return { ...state, shiftNote: a.note, shiftNoteSeenBy: [] };
+    case "seenShiftNote":
+      return state.shiftNoteSeenBy.includes(a.staffId) ? state : { ...state, shiftNoteSeenBy: [...state.shiftNoteSeenBy, a.staffId] };
+    case "setTableNote": {
+      const tableNotes = { ...state.tableNotes };
+      if (a.note) tableNotes[a.tableId] = a.note;
+      else delete tableNotes[a.tableId];
+      return { ...state, tableNotes };
+    }
+    case "addWaitlist":
+      return { ...state, waitlist: [...state.waitlist, a.entry] };
+    case "removeWaitlist":
+      return { ...state, waitlist: state.waitlist.filter((w) => w.id !== a.id) };
+    case "kdsAdvance":
+      // new → started → ready
+      return mapOrder(state, a.orderId, (o) => ({
+        ...o,
+        lines: o.lines.map((l) => {
+          if (!a.lineIds.includes(l.id) || l.readyAt) return l;
+          return l.startedAt ? { ...l, readyAt: a.at } : { ...l, startedAt: a.at };
+        }),
+      }));
+    case "kdsRecall":
+      return mapOrder(state, a.orderId, (o) => ({
+        ...o,
+        lines: o.lines.map((l) => (a.lineIds.includes(l.id) ? { ...l, readyAt: undefined } : l)),
+      }));
   }
 }
 
@@ -149,6 +274,13 @@ interface StoreValue {
   openTable: (tableId: string, guests: number) => Order;
   orderForTable: (tableId: string) => Order | undefined;
   verifyManagerPin: (pin: string) => string | null;
+  /** The signed-in staff member, if any. */
+  me: Staff | null;
+  itemById: (id: string) => MenuItem | undefined;
+  staffById: (id: string) => Staff | undefined;
+  categoryById: (id: string) => Category | undefined;
+  /** Items on sale (not archived), in menu order. */
+  activeMenu: MenuItem[];
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -165,9 +297,14 @@ export function StoreProvider({ children, fallback }: { children: ReactNode; fal
     } catch {
       loaded = null;
     }
-    // Reseed when the stored demo is from a previous day.
+    // A new day reseeds the service (orders, history), but keeps what the owner configured.
     const fresh = loaded && new Date(loaded.shiftOpenedAt).toDateString() === new Date().toDateString();
-    dispatch({ type: "replace", state: fresh ? loaded! : seed() });
+    const next = fresh
+      ? loaded!
+      : loaded
+        ? { ...seed(), menu: loaded.menu, categories: loaded.categories, staff: loaded.staff, clients: loaded.clients, sessionStaffId: loaded.sessionStaffId }
+        : seed();
+    dispatch({ type: "replace", state: next });
     setReady(true);
   }, []);
 
@@ -180,7 +317,10 @@ export function StoreProvider({ children, fallback }: { children: ReactNode; fal
     }
   }, [state, ready]);
 
-  const reset = useCallback(() => dispatch({ type: "replace", state: seed() }), []);
+  const reset = useCallback(
+    () => dispatch({ type: "replace", state: { ...seed(), sessionStaffId: state?.sessionStaffId ?? null } }),
+    [state?.sessionStaffId],
+  );
 
   const value = useMemo<StoreValue | null>(() => {
     if (!ready) return null;
@@ -196,7 +336,13 @@ export function StoreProvider({ children, fallback }: { children: ReactNode; fal
         dispatch({ type: "open", order });
         return order;
       },
-      verifyManagerPin: (pin) => STAFF.find((s) => s.pin === pin && (s.role === "manager" || s.role === "owner"))?.id ?? null,
+      verifyManagerPin: (pin) =>
+        state.staff.find((s) => s.active !== false && s.pin === pin && (s.role === "manager" || s.role === "owner"))?.id ?? null,
+      me: state.sessionStaffId ? (state.staff.find((s) => s.id === state.sessionStaffId) ?? null) : null,
+      itemById: (id) => state.menu.find((m) => m.id === id),
+      staffById: (id) => state.staff.find((s) => s.id === id),
+      categoryById: (id) => state.categories.find((c) => c.id === id),
+      activeMenu: state.menu.filter((m) => !m.archived),
     };
   }, [state, ready, reset]);
 
@@ -210,6 +356,11 @@ export function useStore(): StoreValue {
   return v;
 }
 
+/** For components that also render outside the app (e.g. marketing pages). */
+export function useOptionalStore(): StoreValue | null {
+  return useContext(StoreContext);
+}
+
 export function useNow(intervalMs = 30000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -219,6 +370,5 @@ export function useNow(intervalMs = 30000): number {
   return now;
 }
 
-export const itemById = (id: string) => MENU.find((m) => m.id === id);
-export const staffById = (id: string) => STAFF.find((s) => s.id === id);
+export const newId = uid;
 export const tableById = (id: string) => TABLES.find((t) => t.id === id);

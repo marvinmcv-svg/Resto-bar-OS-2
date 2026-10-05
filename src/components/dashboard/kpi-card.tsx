@@ -30,7 +30,7 @@ export function KpiCard({
           <p
             className={cn(
               "mt-2 text-[12.5px] font-medium",
-              tone === "good" && "text-[#0a7a0a] dark:text-status-good",
+              tone === "good" && "text-status-good-ink",
               tone === "bad" && "text-status-critical",
               tone === "neutral" && "text-muted-foreground",
             )}

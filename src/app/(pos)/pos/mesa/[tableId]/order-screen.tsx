@@ -13,17 +13,18 @@ import { PosHeader } from "@/components/pos/pos-header";
 import { StatusBadge } from "@/components/pos/status-badge";
 import { TicketPanel } from "@/components/pos/ticket-panel";
 import { VoidDialog } from "@/components/pos/void-dialog";
+import { GuestNoteDialog } from "@/components/pos/guest-note-dialog";
+import { can } from "@/modules/pos/permissions";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { CATEGORIES, MENU } from "@/modules/pos/demo-data";
 import { formatBs } from "@/modules/pos/money";
-import { balanceMinor, itemCount, orderTotalMinor, unsentLines } from "@/modules/pos/order";
-import { staffById, tableById, useNow, useStore } from "@/modules/pos/store";
+import { balanceMinor, itemCount, orderTotalMinor, suggestUpsell, unsentLines } from "@/modules/pos/order";
+import { tableById, useNow, useStore } from "@/modules/pos/store";
 import { tableStatus } from "@/modules/pos/table-status";
 import type { ChosenModifier, MenuItem, OrderLine } from "@/modules/pos/types";
 import { cn } from "@/lib/utils";
 
 export function OrderScreen({ tableId }: { tableId: string }) {
-  const { state, dispatch, orderForTable, verifyManagerPin } = useStore();
+  const { state, dispatch, orderForTable, verifyManagerPin, staffById, activeMenu, me } = useStore();
   const router = useRouter();
   const now = useNow(15000);
   const table = tableById(tableId);
@@ -36,6 +37,8 @@ export function OrderScreen({ tableId }: { tableId: string }) {
   const [checkout, setCheckout] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [dismissedUpsell, setDismissedUpsell] = useState<string[]>([]);
 
   // No open order (e.g. reloaded after it was paid): back to the floor.
   useEffect(() => {
@@ -44,10 +47,10 @@ export function OrderScreen({ tableId }: { tableId: string }) {
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (q) return MENU.filter((m) => m.name.toLowerCase().includes(q));
-    if (cat === "populares") return MENU.filter((m) => m.popular);
-    return MENU.filter((m) => m.categoryId === cat);
-  }, [cat, query]);
+    if (q) return activeMenu.filter((m) => m.name.toLowerCase().includes(q));
+    if (cat === "populares") return activeMenu.filter((m) => m.popular);
+    return activeMenu.filter((m) => m.categoryId === cat);
+  }, [cat, query, activeMenu]);
 
   const add = useCallback(
     (item: MenuItem, modifiers: ChosenModifier[] = [], qty = 1, note?: string) => {
@@ -66,7 +69,7 @@ export function OrderScreen({ tableId }: { tableId: string }) {
       toast(`${voidLine.name} anulado`, { description: `Aprobó ${staffById(approvedBy)?.name}. Queda en el cierre del día.` });
       setVoidLine(null);
     },
-    [order, voidLine, dispatch],
+    [order, voidLine, dispatch, staffById],
   );
 
   if (!order || !table) return null;
@@ -96,6 +99,7 @@ export function OrderScreen({ tableId }: { tableId: string }) {
   };
 
   const waiter = staffById(order.waiterId)?.name ?? "";
+  const upsell = suggestUpsell(order, activeMenu.filter((m) => !dismissedUpsell.includes(m.id)), state.categories, state.unavailable);
   const ticket = (
     <TicketPanel
       order={order}
@@ -107,6 +111,15 @@ export function OrderScreen({ tableId }: { tableId: string }) {
       onSend={send}
       onToggleBill={() => dispatch({ type: "requestBill", orderId: order.id, value: !order.billRequested })}
       onCheckout={() => setCheckout(true)}
+      canCharge={can(me?.role, "payment.record")}
+      upsell={upsell}
+      onUpsell={(u) => {
+        if (u.item.modifierGroups.length) setModItem(u.item);
+        else add(u.item);
+        setDismissedUpsell((d) => [...d, u.item.id]);
+      }}
+      guestNote={state.tableNotes[tableId]}
+      onEditNote={() => setNoteOpen(true)}
     />
   );
 
@@ -140,7 +153,7 @@ export function OrderScreen({ tableId }: { tableId: string }) {
               />
             </label>
             <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:-mx-5 sm:px-5" role="tablist" aria-label="Categorías">
-              {[{ id: "populares", name: "Populares", icon: "flame" }, ...CATEGORIES].map((c) => {
+              {[{ id: "populares", name: "Populares", icon: "flame" }, ...state.categories].map((c) => {
                 const active = !query && cat === c.id;
                 return (
                   <button
@@ -237,7 +250,23 @@ export function OrderScreen({ tableId }: { tableId: string }) {
           setModItem(null);
         }}
       />
-      <VoidDialog line={voidLine} onClose={() => setVoidLine(null)} verify={verifyManagerPin} onConfirm={onVoidConfirm} />
+      <VoidDialog
+        line={voidLine}
+        onClose={() => setVoidLine(null)}
+        verify={verifyManagerPin}
+        onConfirm={onVoidConfirm}
+        approver={me && can(me.role, "order.void") ? me : undefined}
+      />
+      <GuestNoteDialog
+        open={noteOpen}
+        tableLabel={table.label}
+        note={state.tableNotes[tableId]}
+        onClose={() => setNoteOpen(false)}
+        onSave={(note) => {
+          dispatch({ type: "setTableNote", tableId, note });
+          setNoteOpen(false);
+        }}
+      />
       <CheckoutDialog order={order} tableLabel={table.label} open={checkout} onClose={() => setCheckout(false)} onPay={pay} />
     </div>
   );

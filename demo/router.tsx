@@ -7,13 +7,14 @@ interface RouterValue {
   push: (href: string) => void;
 }
 
-const RouterContext = createContext<RouterValue>({ path: "/resumen", push: () => {} });
+const RouterContext = createContext<RouterValue>({ path: "/entrar", push: () => {} });
 
 export function RouterProvider({ initial, children }: { initial: string; children: ReactNode }) {
   const [path, setPath] = useState(initial);
   const push = useCallback((href: string) => {
     const clean = href.replace(/\/+$/, "") || "/";
-    setPath(clean === "/" ? "/resumen" : clean);
+    // The panel has no marketing page: "/" opens the sign-in screen.
+    setPath(clean === "/" ? "/entrar" : clean);
     if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   }, []);
   const value = useMemo(() => ({ path, push }), [path, push]);

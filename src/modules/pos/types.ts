@@ -22,6 +22,8 @@ export interface Category {
   name: string;
   icon: string; // lucide icon key, see components/pos/category-icon.tsx
   station: Station;
+  /** Desserts get their own upsell moment, after the mains. */
+  dessert?: boolean;
 }
 
 export interface MenuItem {
@@ -34,6 +36,8 @@ export interface MenuItem {
   modifierGroups: ModifierGroup[];
   available: boolean;
   popular?: boolean;
+  /** Removed from the menu. Soft delete: past orders still reference it. */
+  archived?: boolean;
 }
 
 export type Zone = "salon" | "terraza" | "barra";
@@ -50,13 +54,38 @@ export interface DiningTable {
   h?: number;
 }
 
-export type Role = "owner" | "manager" | "cashier" | "waiter";
+/** "admin" is the platform admin (Resto-bar OS staff), not a restaurant role (ADR-011). */
+export type Role = "admin" | "owner" | "manager" | "cashier" | "waiter" | "bartender" | "kitchen";
 
 export interface Staff {
   id: string;
   name: string;
   role: Role;
   pin: string; // demo only; real PINs are hashed server-side (ADR-010)
+  /** Deactivated staff can't sign in. Never deleted: the audit trail references them. */
+  active?: boolean;
+}
+
+/** Guest context on a table, Toast's "digital chit". */
+export interface GuestNote {
+  name?: string;
+  occasion?: "cumpleanos" | "aniversario" | "alergia" | "vip";
+  text?: string;
+}
+
+export interface WaitlistEntry {
+  id: string;
+  name: string;
+  party: number;
+  phone?: string;
+  addedAt: number;
+  quotedMin: number;
+}
+
+export interface ShiftNote {
+  text: string;
+  by: string;
+  at: number;
 }
 
 export interface ChosenModifier {
@@ -75,6 +104,9 @@ export interface OrderLine {
   modifiers: ChosenModifier[];
   note?: string;
   sentAt?: number;
+  /** Kitchen screen progress. */
+  startedAt?: number;
+  readyAt?: number;
   voided?: { by: string; reason: string; at: number };
 }
 

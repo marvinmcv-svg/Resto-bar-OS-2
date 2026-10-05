@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Minus, Plus, Users } from "lucide-react";
+import { ShiftBanner } from "@/components/pos/shift-banner";
+import { OCCASION } from "@/components/pos/ticket-panel";
+import { WaitlistPanel } from "@/components/pos/waitlist-panel";
 import { PosHeader } from "@/components/pos/pos-header";
 import { StatusBadge } from "@/components/pos/status-badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { TABLES, ZONES } from "@/modules/pos/demo-data";
 import { formatBs, formatBsShort } from "@/modules/pos/money";
 import { minutesOpen, orderTotalMinor } from "@/modules/pos/order";
-import { staffById, useNow, useStore } from "@/modules/pos/store";
+import { useNow, useStore } from "@/modules/pos/store";
 import { STATUS_LABEL, tableStatus, type TableStatus } from "@/modules/pos/table-status";
 import type { DiningTable, Zone } from "@/modules/pos/types";
 import { cn } from "@/lib/utils";
@@ -30,7 +33,7 @@ const DOT: Record<TableStatus, string> = {
 };
 
 export default function FloorPage() {
-  const { state, orderForTable, openTable } = useStore();
+  const { state, orderForTable, openTable, staffById } = useStore();
   const now = useNow(15000);
   const router = useRouter();
   const [zone, setZone] = useState<Zone>("salon");
@@ -76,6 +79,7 @@ export default function FloorPage() {
 
       <div className="flex flex-1 flex-col lg:flex-row">
         <main className="flex-1 p-4 sm:p-6">
+          <ShiftBanner />
           <div
             className="mx-auto grid max-w-[980px] grid-cols-12 gap-3 sm:gap-4"
             style={{ gridTemplateRows: `repeat(${rows}, minmax(44px, 1fr))` }}
@@ -107,6 +111,19 @@ export default function FloorPage() {
                     </span>
                   )}
                   <span className={cn("absolute top-2.5 right-2.5 size-2 rounded-full", t.shape === "round" && "top-[14%] right-[14%]", DOT[status])} />
+                  {(() => {
+                    const occ = state.tableNotes[t.id]?.occasion;
+                    if (!occ) return null;
+                    const Icon = OCCASION[occ].icon;
+                    return (
+                      <span
+                        className={cn("absolute top-2 left-2 grid size-6 place-items-center rounded-full bg-primary text-primary-foreground", t.shape === "round" && "top-[10%] left-[10%]")}
+                        title={OCCASION[occ].label}
+                      >
+                        <Icon className="size-3.5" aria-label={OCCASION[occ].label} />
+                      </span>
+                    );
+                  })()}
                 </button>
               );
             })}
@@ -122,7 +139,8 @@ export default function FloorPage() {
         </main>
 
         <aside className="border-t p-4 sm:p-5 lg:w-[340px] lg:border-t-0 lg:border-l">
-          <div className="flex items-baseline justify-between">
+          <WaitlistPanel onSeated={(id) => router.push(`/pos/mesa/${id}`)} />
+          <div className="mt-7 flex items-baseline justify-between">
             <h2 className="text-[15px] font-semibold">En servicio</h2>
             <span className="text-[13px] text-muted-foreground tabular">
               {formatBs(state.live.reduce((s, o) => s + orderTotalMinor(o), 0))}

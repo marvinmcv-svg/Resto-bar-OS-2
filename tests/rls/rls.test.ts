@@ -7,6 +7,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 const A = { tenant: "00000000-0000-0000-0000-00000000000a", user: "10000000-0000-0000-0000-00000000000a", loc: "20000000-0000-0000-0000-00000000000a" };
 const B = { tenant: "00000000-0000-0000-0000-00000000000b", user: "10000000-0000-0000-0000-00000000000b", loc: "20000000-0000-0000-0000-00000000000b" };
 const WAITER_A = "10000000-0000-0000-0000-0000000000a1";
+const BARTENDER_A = "10000000-0000-0000-0000-0000000000a2";
 const ORDER_A = "30000000-0000-0000-0000-00000000000a";
 
 let db: PGlite;
@@ -30,7 +31,9 @@ async function asUser(userId: string, sql: string, params: unknown[] = []) {
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(SUPABASE_SHIM);
-  await db.exec(readFileSync(join(__dirname, "../../supabase/migrations/0001_core.sql"), "utf8"));
+  for (const m of ["0001_core.sql", "0002_roles_menu.sql"]) {
+    await db.exec(readFileSync(join(__dirname, "../../supabase/migrations", m), "utf8"));
+  }
   await db.exec(`
     grant usage on schema public, auth to authenticated;
     grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -42,6 +45,8 @@ beforeAll(async () => {
     await db.query(`insert into orders (tenant_id, location_id, total_minor) values ($1, $2, 1000)`, [t.tenant, t.loc]);
   }
   await db.query(`insert into memberships (tenant_id, user_id, role) values ($1, $2, 'waiter')`, [A.tenant, WAITER_A]);
+  await db.query(`insert into memberships (tenant_id, user_id, role) values ($1, $2, 'bartender')`, [A.tenant, BARTENDER_A]);
+  await db.query(`insert into platform_admins (user_id) values ($1)`, [A.user]);
   await db.query(`insert into orders (id, tenant_id, location_id, total_minor) values ($1, $2, $3, 5000)`, [ORDER_A, A.tenant, A.loc]);
   await db.query(
     `insert into payments (tenant_id, location_id, order_id, method, amount_minor) values ($1, $2, $3, 'cash', 5000)`,
@@ -133,5 +138,33 @@ describe("Role-based writes (ADR-010)", () => {
       "insert into payments (tenant_id, location_id, order_id, method, amount_minor) values ($1, $2, $3, 'qr', 100) returning id",
       [A.tenant, A.loc, ORDER_A]);
     expect(res.rows).toHaveLength(1);
+  });
+
+  it("a bartender can open orders but cannot record payments or change the menu", async () => {
+    const res = await asUser(BARTENDER_A,
+      "insert into orders (tenant_id, location_id) values ($1, $2) returning id", [A.tenant, A.loc]);
+    expect(res.rows).toHaveLength(1);
+    await expect(
+      asUser(BARTENDER_A,
+        "insert into payments (tenant_id, location_id, order_id, method, amount_minor) values ($1, $2, $3, 'cash', 1)",
+        [A.tenant, A.loc, ORDER_A]),
+    ).rejects.toThrow(/row-level security/);
+    await expect(
+      asUser(BARTENDER_A, "insert into menu_categories (tenant_id, location_id, name) values ($1, $2, 'X')", [A.tenant, A.loc]),
+    ).rejects.toThrow(/row-level security/);
+  });
+});
+
+describe("Platform admins (ADR-011)", () => {
+  it("are invisible to every client session, including the admin's own", async () => {
+    for (const user of [A.user, B.user, WAITER_A]) {
+      expect((await asUser(user, "select * from platform_admins")).rows).toHaveLength(0);
+    }
+  });
+
+  it("cannot be self-granted from a client session", async () => {
+    await expect(
+      asUser(B.user, "insert into platform_admins (user_id) values ($1)", [B.user]),
+    ).rejects.toThrow(/row-level security/);
   });
 });

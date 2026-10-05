@@ -15,6 +15,8 @@
   --color-status-serious: var(--status-serious);
   --color-status-critical: var(--status-critical);
   --color-status-info: var(--status-info);
+  --color-status-good-ink: var(--status-good-ink);
+  --color-status-warning-ink: var(--status-warning-ink);
   --shadow-card: var(--shadow-card);
   --shadow-float: var(--shadow-float);
   --ease-out-soft: var(--ease-out);
@@ -96,6 +98,8 @@
   --status-serious: #ec835a;
   --status-critical: #d03b3b;
   --status-info: #2a78d6;
+  --status-good-ink: #0a7a0a; /* status text on light surfaces, 4.5:1 */
+  --status-warning-ink: #a86b00;
   --sidebar: #fbfbfd;
   --sidebar-foreground: #1d1d1f;
   --sidebar-primary: #cf4a0a;
@@ -140,6 +144,8 @@
   --chart-6: #008300;
   --chart-grid: #2c2c2e;
   --status-info: #3987e5;
+  --status-good-ink: var(--status-good);
+  --status-warning-ink: var(--status-warning);
   --sidebar: #111113;
   --sidebar-foreground: #f5f5f7;
   --sidebar-primary: #ff7a2e;

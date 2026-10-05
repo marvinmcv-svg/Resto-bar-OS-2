@@ -2,19 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, LayoutGrid, LineChart } from "lucide-react";
 import { LogoMark } from "@/components/brand/logo";
+import { areasFor } from "@/components/app/areas";
+import { useStore } from "@/modules/pos/store";
 import { cn } from "@/lib/utils";
 
-const ITEMS = [
-  { href: "/pos", label: "Salón", icon: LayoutGrid, match: (p: string) => p.startsWith("/pos") },
-  { href: "/menu", label: "Menú", icon: BookOpen, match: (p: string) => p === "/menu" },
-  { href: "/resumen", label: "Resumen", icon: LineChart, match: (p: string) => p === "/resumen" },
-];
-
-/** Slim icon rail for the tablet POS (tablet landscape and up). */
+/** Slim icon rail for the tablet POS (tablet landscape and up). Shows only what the role can open. */
 export function PosRail() {
   const pathname = usePathname();
+  const { me } = useStore();
+  const items = me ? areasFor(me.role).filter((a) => a.href !== "/admin") : [];
   return (
     <nav
       aria-label="Principal"
@@ -23,8 +20,8 @@ export function PosRail() {
       <Link href="/pos" aria-label="RestoBar OS" className="mb-4">
         <LogoMark className="size-11 rounded-[14px]" />
       </Link>
-      {ITEMS.map(({ href, label, icon: Icon, match }) => {
-        const active = match(pathname);
+      {items.map(({ href, short, icon: Icon }) => {
+        const active = pathname === href || pathname.startsWith(href + "/");
         return (
           <Link
             key={href}
@@ -36,7 +33,7 @@ export function PosRail() {
             )}
           >
             <Icon className="size-[22px]" aria-hidden />
-            {label}
+            {short}
           </Link>
         );
       })}

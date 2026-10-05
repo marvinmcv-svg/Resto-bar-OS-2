@@ -20,7 +20,7 @@ const timestamps = {
 };
 
 // "device" = a POS tablet's own login (ADR-010). Staff identify on the device with a PIN.
-export const roleEnum = pgEnum("member_role", ["owner", "manager", "cashier", "waiter", "device"]);
+export const roleEnum = pgEnum("member_role", ["owner", "manager", "cashier", "waiter", "bartender", "kitchen", "device"]);
 export const orderStatusEnum = pgEnum("order_status", ["open", "paid", "voided"]);
 export const paymentMethodEnum = pgEnum("payment_method", ["cash", "qr", "card_external", "transfer", "other"]);
 export const invoiceStatusEnum = pgEnum("invoice_status", [
@@ -32,6 +32,12 @@ export const tenants = pgTable("tenants", {
   name: text("name").notNull(),
   taxId: text("tax_id"), // NIT
   ...timestamps,
+});
+
+// Resto-bar OS staff (ADR-011). Not tenant-scoped: service role only, RLS on with no policies.
+export const platformAdmins = pgTable("platform_admins", {
+  userId: uuid("user_id").primaryKey(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const locations = pgTable("locations", {
@@ -80,6 +86,9 @@ export const menuItems = pgTable("menu_items", {
   name: text("name").notNull(),
   priceMinor: bigint("price_minor", { mode: "number" }).notNull(),
   active: boolean("active").notNull().default(true),
+  description: text("description"),
+  imageUrl: text("image_url"),
+  popular: boolean("popular").notNull().default(false),
   ...timestamps,
 }, (t) => [sameTenantLocation(t)]);
 

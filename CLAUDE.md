@@ -15,6 +15,7 @@ Next.js 15 App Router, TypeScript, Supabase (Postgres/Auth/Realtime), Drizzle, T
 
 ## Commands
 - `pnpm dev` · `pnpm lint` · `pnpm typecheck` · `pnpm test` (Vitest, including RLS tests on PGlite) · `pnpm test:e2e` (Playwright; set `PW_CHROMIUM_PATH` if the bundled browser is missing)
+- `pnpm build:panel` (single-file demo) · `pnpm video:shots` + `pnpm video:render` (landing screenshots and the HyperFrames film, see `video/README.md`)
 
 ## Rules
 - Every table has `tenant_id` + RLS. A new table also needs a policy in `supabase/migrations/` and a case in `tests/rls/`.
@@ -32,7 +33,8 @@ Next.js 15 App Router, TypeScript, Supabase (Postgres/Auth/Realtime), Drizzle, T
 
 ## Frontend
 - Design system: `docs/design/DESIGN.md`. Use tokens from `src/app/globals.css`, never raw hex in components.
-- Routes: `(admin)` = owner back office (`/resumen`, `/menu`); `(pos)` = always-dark POS (`/pos`, `/pos/mesa/[tableId]`).
+- Routes: `/` = landing page; `/entrar` = PIN sign-in; `(admin)` = back office (`/admin` platform, `/resumen`, `/menu`, `/equipo`); `(pos)` = always-dark service screens (`/pos`, `/pos/mesa/[tableId]`, `/cocina`).
+- Roles and route access: `src/modules/pos/permissions.ts` (mirrors RLS; ADR-010, ADR-011). New screens go in `components/app/areas.ts` and the `ROUTES` table there.
 - Demo state lives in `src/modules/pos/store.tsx` (client, localStorage). Domain math is in `src/modules/pos/order.ts` and must stay pure and tested.
 - UI primitives: `src/components/ui` (Shadcn/Radix). No `transition: all`; use `press`, `glass`, `tabular` utilities.
 

@@ -2,6 +2,7 @@
 
 > Source of truth for **what we build and when**. Strategy context: `docs/HANDOFF.md`, `docs/business/offer.md`.
 > Revised 2026-10-04: online-first v1, native Android cashier app for printing, offline mode moved to Jan 2027.
+> Revised 2026-10-05 after the Toast study (`docs/research/toast.md`): bartender + kitchen roles and a platform admin (ADR-011); kitchen screen, upsell suggestions, shift note, guest notes and waitlist built in the demo (UI on the demo store; they go live with the Supabase wiring). Printed tickets stay the opening-day path.
 
 ## 1. Big picture
 
@@ -34,7 +35,7 @@
 | Core POS | menu, modifiers, tables, orders from phones, shift close | split/merge checks, tips | discounts, combos, happy hour | multi-location |
 | Kitchen | tickets printed per station (kitchen/bar) | reprint, print-failure alerts | KDS screen | prep analytics |
 | Money | record cash/QR/card/transfer; cash count at close | — | QR reconciliation | payment adapters, take-rate |
-| People | staff PINs, roles (owner/manager/cashier/waiter), audit log | — | — | scheduling, tips distribution |
+| People | staff PINs, roles (owner/manager/cashier/waiter/bartender/kitchen), audit log | — | — | scheduling, tips distribution |
 | Owner intelligence | — | **WhatsApp daily close** | weekly summary; alerts (void > X, cash gap) | AI margin/reorder |
 | Compliance (BO) | invoices in SIN's free tool (manual) | SIN invoice via provider adapter | IVA Transparente `[VERIFY]` | in-house homologation |
 | Reliability | hotspot failover + printable paper order pad | device health view | offline spike passes | **offline mode (Jan)** |

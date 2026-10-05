@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   balanceMinor, changeMinor, itemCount, lineTotalMinor, orderTotalMinor, selectedLinesMinor,
-  splitEqually, tipForPercent, unsentLines,
+  splitEqually, suggestUpsell, tipForPercent, unsentLines,
 } from "./order";
+import { CATEGORIES, MENU } from "./demo-data";
 import type { Order, OrderLine } from "./types";
 
 const line = (over: Partial<OrderLine> = {}): OrderLine => ({
@@ -62,5 +63,39 @@ describe("tips and change", () => {
   it("never returns negative change", () => {
     expect(changeMinor(5000, 10000)).toBe(5000);
     expect(changeMinor(5000, 2000)).toBe(0);
+  });
+});
+
+describe("suggestUpsell", () => {
+  const cats = CATEGORIES;
+  const menu = MENU;
+  const withItems = (...ids: [string, boolean?][]) =>
+    order(ids.map(([itemId, sent]) => line({ itemId, sentAt: sent ? 1 : undefined })));
+
+  it("suggests nothing for an empty order", () => {
+    expect(suggestUpsell(order([]), menu, cats, [])).toBeNull();
+  });
+
+  it("suggests a popular drink when the table ordered food only", () => {
+    const s = suggestUpsell(withItems(["pique"]), menu, cats, []);
+    expect(s?.item.categoryId).toMatch(/cervezas|cocteles|sin-alcohol/);
+    expect(s?.item.popular).toBe(true);
+  });
+
+  it("suggests food when the table ordered drinks only", () => {
+    const s = suggestUpsell(withItems(["pacena"]), menu, cats, []);
+    expect(["picar", "platos"]).toContain(s?.item.categoryId);
+  });
+
+  it("suggests dessert once mains are in the kitchen", () => {
+    const s = suggestUpsell(withItems(["pique", true], ["pacena"]), menu, cats, []);
+    expect(s?.item.categoryId).toBe("postres");
+  });
+
+  it("never suggests sold-out, archived or already-ordered items", () => {
+    const desserts = menu.filter((m) => m.categoryId === "postres").map((m) => m.id);
+    expect(suggestUpsell(withItems(["pique", true], ["pacena"]), menu, cats, desserts)).toBeNull();
+    const archived = menu.map((m) => (m.categoryId === "postres" ? { ...m, archived: true } : m));
+    expect(suggestUpsell(withItems(["pique", true], ["pacena"]), archived, cats, [])).toBeNull();
   });
 });

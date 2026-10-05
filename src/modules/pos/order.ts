@@ -1,4 +1,4 @@
-import type { Order, OrderLine, Payment } from "./types";
+import type { Category, MenuItem, Order, OrderLine, Payment } from "./types";
 
 export function lineUnitMinor(line: Pick<OrderLine, "unitPriceMinor" | "modifiers">): number {
   return line.unitPriceMinor + line.modifiers.reduce((s, m) => s + m.priceMinor, 0);
@@ -67,4 +67,44 @@ export function changeMinor(dueMinor: number, receivedMinor: number): number {
 /** Minutes an order has been open. */
 export function minutesOpen(order: Order, now: number): number {
   return Math.max(0, Math.floor((now - order.openedAt) / 60000));
+}
+
+export interface Upsell {
+  item: MenuItem;
+  reason: string;
+}
+
+/**
+ * One add-on to suggest while ordering (Toast's "Menu Upsells", rule-based):
+ * food without a drink → a drink; drinks without food → something to share;
+ * mains already in the kitchen and no dessert → a dessert. Popular items first.
+ */
+export function suggestUpsell(order: Order, menu: MenuItem[], categories: Category[], unavailable: string[]): Upsell | null {
+  const lines = activeLines(order);
+  if (lines.length === 0) return null;
+  const catOf = new Map(menu.map((m) => [m.id, categories.find((c) => c.id === m.categoryId)]));
+  const has = (pred: (c: Category) => boolean) => lines.some((l) => { const c = catOf.get(l.itemId); return !!c && pred(c); });
+  const isDrink = (c: Category) => c.station === "barra";
+  const isFood = (c: Category) => c.station === "cocina" && !c.dessert;
+  const ordered = new Set(lines.map((l) => l.itemId));
+  const pick = (pred: (c: Category) => boolean) =>
+    menu
+      .filter((m) => !m.archived && !unavailable.includes(m.id) && !ordered.has(m.id))
+      .filter((m) => { const c = catOf.get(m.id); return !!c && pred(c); })
+      .sort((a, b) => Number(!!b.popular) - Number(!!a.popular))[0];
+
+  if (has(isFood) && !has(isDrink)) {
+    const item = pick(isDrink);
+    if (item) return { item, reason: "La mesa no pidió bebidas" };
+  }
+  if (has(isDrink) && !has(isFood)) {
+    const item = pick(isFood);
+    if (item) return { item, reason: "Algo para acompañar las bebidas" };
+  }
+  const mainsSent = lines.some((l) => { const c = catOf.get(l.itemId); return !!c && isFood(c) && !!l.sentAt; });
+  if (mainsSent && !has((c) => !!c.dessert)) {
+    const item = pick((c) => !!c.dessert);
+    if (item) return { item, reason: "Para cerrar la comida" };
+  }
+  return null;
 }

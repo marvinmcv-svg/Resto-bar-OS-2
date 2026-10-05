@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, Banknote, ChevronRight, Download, HandCoins, MessageCircle, Receipt, Send, ShieldAlert, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Panel, PanelHeader } from "@/components/app/panel";
+import { ShiftNoteEditor } from "@/components/dashboard/shift-note-editor";
 import { CategoryDonut, type DonutSlice } from "@/components/dashboard/category-donut";
 import { HourlySalesChart, type HourPoint } from "@/components/dashboard/hourly-sales-chart";
 import { KpiCard } from "@/components/dashboard/kpi-card";
@@ -12,10 +13,10 @@ import { ServiceMeter } from "@/components/dashboard/service-meter";
 import { ItemImage } from "@/components/pos/item-image";
 import { StatusBadge } from "@/components/pos/status-badge";
 import { Button } from "@/components/ui/button";
-import { CATEGORIES, RESTAURANT, TABLES } from "@/modules/pos/demo-data";
+import { RESTAURANT, TABLES } from "@/modules/pos/demo-data";
 import { formatBs, formatBsShort } from "@/modules/pos/money";
 import { orderTotalMinor } from "@/modules/pos/order";
-import { itemById, staffById, useNow, useStore } from "@/modules/pos/store";
+import { useNow, useStore } from "@/modules/pos/store";
 import { tableStatus, type TableStatus } from "@/modules/pos/table-status";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +31,7 @@ function greeting(h: number) {
 }
 
 export default function ResumenPage() {
-  const { state } = useStore();
+  const { state, itemById, staffById, me } = useStore();
   const now = useNow();
   const date = new Date(now);
   const weekday = date.toLocaleDateString("es-BO", { weekday: "long" });
@@ -74,7 +75,7 @@ export default function ResumenPage() {
     }
   const top = [...byItem.entries()].sort((a, b) => b[1].totalMinor - a[1].totalMinor).slice(0, 5);
   const topMax = top[0]?.[1].totalMinor ?? 1;
-  const donut: DonutSlice[] = CATEGORIES.map((c, i) => ({
+  const donut: DonutSlice[] = state.categories.map((c, i) => ({
     key: c.id,
     label: c.name,
     valueMinor: byCategory.get(c.id) ?? 0,
@@ -102,7 +103,7 @@ export default function ResumenPage() {
           <p className="text-[13px] font-medium text-muted-foreground first-letter:uppercase">
             {date.toLocaleDateString("es-BO", { weekday: "long", day: "numeric", month: "long" })} · {RESTAURANT.location}
           </p>
-          <h1 className="mt-1 text-[28px] font-semibold sm:text-[34px]">{greeting(date.getHours())}, Marvin</h1>
+          <h1 className="mt-1 text-[28px] font-semibold sm:text-[34px]">{greeting(date.getHours())}, {me?.name ?? "equipo"}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -145,7 +146,7 @@ export default function ResumenPage() {
               <span
                 className={cn(
                   "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12.5px] font-medium",
-                  delta >= 0 ? "bg-status-good/12 text-[#0a7a0a] dark:text-status-good" : "bg-status-critical/12 text-status-critical",
+                  delta >= 0 ? "bg-status-good/12 text-status-good-ink" : "bg-status-critical/12 text-status-critical",
                 )}
               >
                 {delta >= 0 ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}
@@ -317,6 +318,8 @@ export default function ResumenPage() {
             </div>
           </div>
         </Panel>
+
+        <ShiftNoteEditor className="animate-enter lg:col-span-12" />
       </div>
     </div>
   );

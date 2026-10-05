@@ -6,13 +6,40 @@ const bs = (n: number) => Math.round(n * 100);
 
 export const RESTAURANT = { name: "La Casona", location: "Equipetrol · Santa Cruz" };
 
+// Demo PINs are printed on the sign-in screen on purpose: this is the sales demo.
 export const STAFF: Staff[] = [
-  { id: "s-marvin", name: "Marvin", role: "owner", pin: "0000" },
-  { id: "s-daniela", name: "Daniela", role: "manager", pin: "1234" },
-  { id: "s-carla", name: "Carla", role: "cashier", pin: "2222" },
-  { id: "s-ana", name: "Ana", role: "waiter", pin: "1111" },
-  { id: "s-luis", name: "Luis", role: "waiter", pin: "3333" },
+  { id: "s-roberto", name: "Roberto", role: "owner", pin: "0000", active: true },
+  { id: "s-daniela", name: "Daniela", role: "manager", pin: "1234", active: true },
+  { id: "s-carla", name: "Carla", role: "cashier", pin: "2222", active: true },
+  { id: "s-ana", name: "Ana", role: "waiter", pin: "1111", active: true },
+  { id: "s-luis", name: "Luis", role: "waiter", pin: "3333", active: true },
+  { id: "s-jorge", name: "Jorge", role: "bartender", pin: "4444", active: true },
+  { id: "s-rosa", name: "Rosa", role: "kitchen", pin: "5555", active: true },
+  { id: "s-marvin", name: "Marvin", role: "admin", pin: "9999", active: true },
 ];
+
+/** Client restaurants as the platform admin sees them (demo). */
+export interface ClientRestaurant {
+  id: string;
+  name: string;
+  area: string;
+  status: "activo" | "prueba" | "instalacion";
+  plan: "fundador";
+  monthlyMinor: number;
+  installedOn?: string; // ISO date
+  owner: string;
+  whatsapp: string;
+  lastSyncMinAgo?: number;
+  tables: number;
+}
+
+export const CLIENTS: ClientRestaurant[] = [
+  { id: "c-casona", name: "La Casona", area: "Equipetrol", status: "activo", plan: "fundador", monthlyMinor: bs(350), installedOn: "2026-10-01", owner: "Roberto", whatsapp: "+591 70000001", lastSyncMinAgo: 0, tables: 22 },
+  { id: "c-patio", name: "El Patio Cruceño", area: "Av. San Martín", status: "prueba", plan: "fundador", monthlyMinor: bs(350), installedOn: "2026-10-03", owner: "Valeria", whatsapp: "+591 70000002", lastSyncMinAgo: 3, tables: 14 },
+  { id: "c-tunari", name: "Bar Tunari", area: "Monseñor Rivero", status: "instalacion", plan: "fundador", monthlyMinor: bs(350), installedOn: "2026-10-09", owner: "Diego", whatsapp: "+591 70000003", tables: 10 },
+];
+
+export const FOUNDER_SEATS = 20;
 
 export const CATEGORIES: Category[] = [
   { id: "picar", name: "Para picar", icon: "drumstick", station: "cocina" },
@@ -20,7 +47,7 @@ export const CATEGORIES: Category[] = [
   { id: "cervezas", name: "Cervezas", icon: "beer", station: "barra" },
   { id: "cocteles", name: "Cócteles", icon: "martini", station: "barra" },
   { id: "sin-alcohol", name: "Sin alcohol", icon: "cup", station: "barra" },
-  { id: "postres", name: "Postres", icon: "dessert", station: "cocina" },
+  { id: "postres", name: "Postres", icon: "dessert", station: "cocina", dessert: true },
 ];
 
 const g = (id: string, name: string, options: [string, number][], required = false, multi = false): ModifierGroup => ({
@@ -155,6 +182,8 @@ export function seedLiveOrders(now: number): Order[] {
     o("m7", "s-luis", 7, 82, [line("alitas", 2, 75, now, [1]), line("pacena", 6, 78, now), line("tequenos", 2, 75, now), line("huari", 3, 40, now)]),
     o("t2", "s-ana", 4, 21, [line("chuflay", 4, 18, now, [1]), line("cunape", 2, 18, now)]),
     o("b3", "s-luis", 1, 9, [line("artesanal", 1, 8, now)]),
+    o("m6", "s-ana", 4, 6, [line("pique", 1, 3, now, [0, 1]), line("sopa-mani", 2, 3, now), line("limonada", 2, 4, now)]),
+    o("t5", "s-luis", 2, 4, [line("mojito", 2, 2, now, [1]), line("papas", 1, 2, now)]),
   ];
 }
 

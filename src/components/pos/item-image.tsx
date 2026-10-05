@@ -1,12 +1,16 @@
+"use client";
+
 import Image from "next/image";
 import { CATEGORIES } from "@/modules/pos/demo-data";
+import { useOptionalStore } from "@/modules/pos/store";
 import type { MenuItem } from "@/modules/pos/types";
 import { cn } from "@/lib/utils";
 import { CategoryIcon } from "./category-icon";
 
 /** Menu photo, or a calm category-icon tile when the restaurant hasn't uploaded one. */
 export function ItemImage({ item, className, sizes = "200px" }: { item: MenuItem; className?: string; sizes?: string }) {
-  const cat = CATEGORIES.find((c) => c.id === item.categoryId);
+  const store = useOptionalStore();
+  const cat = (store?.state.categories ?? CATEGORIES).find((c) => c.id === item.categoryId);
   if (item.image) {
     return (
       <div className={cn("relative overflow-hidden bg-muted", className)}>

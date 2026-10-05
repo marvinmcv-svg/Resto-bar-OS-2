@@ -5,6 +5,8 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+const DARK = ["/pos", "/cocina", "/entrar"];
+
 /** The POS always runs dark (dim bars at night, less glare); the back office follows the owner's choice. */
 export function Providers({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -14,7 +16,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       defaultTheme="light"
       enableSystem
       disableTransitionOnChange
-      forcedTheme={pathname.startsWith("/pos") ? "dark" : undefined}
+      forcedTheme={DARK.some((p) => pathname.startsWith(p)) ? "dark" : undefined}
     >
       <TooltipProvider delayDuration={300}>
         {children}
