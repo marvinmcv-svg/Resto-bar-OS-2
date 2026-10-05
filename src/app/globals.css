@@ -16,6 +16,8 @@
   --color-status-critical: var(--status-critical);
   --color-status-info: var(--status-info);
   --color-status-good-ink: var(--status-good-ink);
+  --color-wa-surface: var(--wa-surface);
+  --color-wa-bubble: var(--wa-bubble);
   --color-status-warning-ink: var(--status-warning-ink);
   --shadow-card: var(--shadow-card);
   --shadow-float: var(--shadow-float);
@@ -99,6 +101,8 @@
   --status-critical: #d03b3b;
   --status-info: #2a78d6;
   --status-good-ink: #0a7a0a; /* status text on light surfaces, 4.5:1 */
+  --wa-surface: #0b141a; /* WhatsApp preview: same in both themes */
+  --wa-bubble: #005c4b;
   --status-warning-ink: #a86b00;
   --sidebar: #fbfbfd;
   --sidebar-foreground: #1d1d1f;

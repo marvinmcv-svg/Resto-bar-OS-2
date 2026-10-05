@@ -39,8 +39,8 @@
 | Owner intelligence | — | **WhatsApp daily close** | weekly summary; alerts (void > X, cash gap) | AI margin/reorder |
 | Compliance (BO) | invoices in SIN's free tool (manual) | SIN invoice via provider adapter | IVA Transparente `[VERIFY]` | in-house homologation |
 | Reliability | hotspot failover + printable paper order pad | device health view | offline spike passes | **offline mode (Jan)** |
-| Back office | — | — | basic inventory + top-20 recipe cost | purchasing, suppliers |
-| Growth | — | — | QR menu | QR ordering, delivery apps, loyalty |
+| Back office | — | — | **inventory, recipe cost, waste, suggested order** (built in demo, ADR-013) | purchase orders, supplier invoices |
+| Growth | — | — | **guests (CRM), reservations, WhatsApp campaigns via wa.me links, analytics** (built in demo, ADR-013); QR menu | automatic WhatsApp Business sending, QR ordering, delivery apps, loyalty |
 | Platform | append-only events | signed webhooks → n8n | n8n templates, accountant export | public REST API v1 |
 
 ## 3. Acceptance criteria
@@ -88,7 +88,10 @@ Everything in the app today runs on the browser demo store (`src/modules/pos/sto
 | Orders / tables / kitchen | Floor plan, orders, modifiers, send, void with PIN, kitchen screen, upsell, waitlist, guest notes | Transfer/merge tables, course firing, discounts | v1.x |
 | Cash register | `/caja`: open, bills queue, cash in/out, count and close, shift report | Printed close ticket (ESC/POS) | With printing |
 | HR | Files (owner-only pay), clock in/out, schedules, attendance, tip split, CSV for the accountant | Payroll (accountant), leave requests | 2027 |
-| Owner | Dashboard, shift note, last close on the dashboard | Date-range reports, real WhatsApp send | Wedge v1 |
-| **Going live (opening-day blocker)** | Schema + RLS (0001-0003) | Supabase project + auth (owner OTP, device pairing, server PIN check), replace the demo store with Supabase + Realtime, ESC/POS printing (Capacitor), SIN provider adapter, n8n WhatsApp | **Next** |
-| Back office | — | Inventory, recipe cost, suppliers | Dec 2026 |
+| Owner | Dashboard, shift note, last close, `/analitica` (7/30 days vs previous, weekday averages, menu engineering, sales per waiter), `/pagos` with CSV | Real WhatsApp daily close (n8n) | Wedge v1 |
+| Inventory | `/inventario`: stock that drops with each order via recipes, receive/count/waste (append-only ledger), recipe cost and margin, suggested order per supplier | Purchase orders, supplier invoices, loading each partner's real recipes | v1.x |
+| Guests and reservations | `/clientes` (CRM with segments and opt-in), `/reservas` (day view, table suggestions, conflicts, seat to table, no-shows) | Online booking page, reminders by WhatsApp | v1.x |
+| Marketing | `/marketing`: segment, template, preview, one tap per guest via wa.me | Automatic sending through WhatsApp Business API (n8n) | 2027 |
+| Mobile app | Installable PWA (manifest, icons, install prompt, service worker with a `/sin-conexion` fallback page). **Not offline mode** (ADR-002) | Native wrapper (Capacitor) for printing | With printing |
+| **Going live (opening-day blocker)** | Schema + RLS (0001-0004) | Supabase project + auth (owner OTP, device pairing, server PIN check), replace the demo store with Supabase + Realtime, ESC/POS printing (Capacitor), SIN provider adapter, n8n WhatsApp | **Next** |
 | Hotel | — | Rooms, reservations, charge to room | 2027 (out of scope; keep `tenant/location` model ready) |

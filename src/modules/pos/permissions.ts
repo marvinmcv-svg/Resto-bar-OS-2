@@ -15,22 +15,30 @@ export type Permission =
   | "cash.manage" // open, move and close the cash register
   | "hr.manage" // schedules, attendance, tips
   | "hr.pay.view" // CI, pay type and rate (ADR-012)
-  | "time.clock"; // clock in and out
+  | "time.clock" // clock in and out
+  | "inventory.view" // see stock, log waste
+  | "inventory.manage" // receive, count, costs, recipes
+  | "guests.manage"
+  | "reservations.manage"
+  | "marketing.manage"
+  | "payments.view";
 
 const MATRIX: Record<Role, Permission[]> = {
-  admin: ["tenants.manage", "reports.view", "menu.edit", "menu.86", "staff.manage", "kds.view"],
+  admin: ["tenants.manage", "reports.view", "menu.edit", "menu.86", "staff.manage", "kds.view", "inventory.view"],
   owner: [
     "reports.view", "menu.edit", "menu.86", "staff.manage", "order.take", "order.void", "payment.record", "kds.view",
     "cash.manage", "hr.manage", "hr.pay.view", "time.clock",
+    "inventory.view", "inventory.manage", "guests.manage", "reservations.manage", "marketing.manage", "payments.view",
   ],
   manager: [
     "reports.view", "menu.edit", "menu.86", "staff.manage", "order.take", "order.void", "payment.record", "kds.view",
     "cash.manage", "hr.manage", "time.clock",
+    "inventory.view", "inventory.manage", "guests.manage", "reservations.manage", "marketing.manage", "payments.view",
   ],
-  cashier: ["order.take", "payment.record", "cash.manage", "time.clock"],
-  waiter: ["order.take", "time.clock"],
-  bartender: ["order.take", "menu.86", "kds.view", "time.clock"],
-  kitchen: ["menu.86", "kds.view", "time.clock"],
+  cashier: ["order.take", "payment.record", "cash.manage", "time.clock", "guests.manage", "reservations.manage", "payments.view"],
+  waiter: ["order.take", "time.clock", "reservations.manage"],
+  bartender: ["order.take", "menu.86", "kds.view", "time.clock", "inventory.view"],
+  kitchen: ["menu.86", "kds.view", "time.clock", "inventory.view"],
 };
 
 export const ROLES: Role[] = ["admin", "owner", "manager", "cashier", "waiter", "bartender", "kitchen"];
@@ -47,12 +55,12 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 export const ROLE_SUMMARY: Record<Role, string> = {
   admin: "Ve todos los restaurantes clientes, da de alta locales y da soporte.",
-  owner: "Todo su restaurante: ventas, menú, equipo, sueldos, caja y anulaciones.",
-  manager: "Opera el turno: menú, horarios, anulaciones, caja y propinas. No ve sueldos.",
-  cashier: "Abre y cierra la caja, cobra y registra entradas y salidas de efectivo.",
-  waiter: "Abre mesas y envía pedidos desde su celular. No cobra ni anula.",
-  bartender: "Pedidos de barra, pantalla de barra y marca bebidas agotadas.",
-  kitchen: "Pantalla de cocina: marca platos listos y agotados.",
+  owner: "Todo su restaurante: ventas, menú, inventario, equipo, sueldos, caja y marketing.",
+  manager: "Opera el turno: menú, inventario, horarios, caja, reservas y propinas. No ve sueldos.",
+  cashier: "Abre y cierra la caja, cobra, registra efectivo, clientes y reservas.",
+  waiter: "Abre mesas, toma pedidos y reservas desde su celular. No cobra ni anula.",
+  bartender: "Pedidos y pantalla de barra, agotados y mermas de barra.",
+  kitchen: "Pantalla de cocina, agotados y mermas de cocina.",
 };
 
 export const PERMISSION_LABEL: Record<Permission, string> = {
@@ -69,6 +77,12 @@ export const PERMISSION_LABEL: Record<Permission, string> = {
   "hr.manage": "Horarios, asistencia y propinas",
   "hr.pay.view": "Ver CI, sueldos y datos personales",
   "time.clock": "Marcar entrada y salida",
+  "inventory.view": "Ver stock y registrar mermas",
+  "inventory.manage": "Compras, conteos, costos y recetas",
+  "guests.manage": "Clientes",
+  "reservations.manage": "Reservas",
+  "marketing.manage": "Campañas por WhatsApp",
+  "payments.view": "Ver todos los pagos",
 };
 
 export const PERMISSIONS = Object.keys(PERMISSION_LABEL) as Permission[];
@@ -93,6 +107,12 @@ const ROUTES: [string, Permission][] = [
   ["/equipo", "staff.manage"],
   ["/cocina", "kds.view"],
   ["/caja", "cash.manage"],
+  ["/inventario", "inventory.view"],
+  ["/clientes", "guests.manage"],
+  ["/reservas", "reservations.manage"],
+  ["/marketing", "marketing.manage"],
+  ["/pagos", "payments.view"],
+  ["/analitica", "reports.view"],
   ["/pos", "order.take"],
 ];
 

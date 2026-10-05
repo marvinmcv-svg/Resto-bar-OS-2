@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { LogoMark } from "@/components/brand/logo";
 import { ROLE_TINT } from "@/components/app/role-tint";
 import { PinPad } from "@/components/pos/pin-pad";
+import { InstallPrompt } from "@/components/app/pwa";
 import { RESTAURANT } from "@/modules/pos/demo-data";
 import { can, homeFor, ROLE_LABEL, ROLES } from "@/modules/pos/permissions";
 import { newId, useNow, useStore } from "@/modules/pos/store";
@@ -155,6 +156,7 @@ export default function EntrarPage() {
           </section>
         )}
 
+        {!who && !clockFor && <InstallPrompt className="mx-auto mb-5 w-full max-w-md" />}
         <footer className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
           <ShieldCheck className="size-3.5" aria-hidden />
           Los permisos también se validan en la base de datos, no solo en la pantalla.

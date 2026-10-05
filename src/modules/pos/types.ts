@@ -68,6 +68,8 @@ export interface Staff {
 
 /** Guest context on a table, Toast's "digital chit". */
 export interface GuestNote {
+  /** Linked guest-book entry: their visit and spend are updated when the bill is paid. */
+  guestId?: string;
   name?: string;
   occasion?: "cumpleanos" | "aniversario" | "alergia" | "vip";
   text?: string;

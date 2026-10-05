@@ -88,7 +88,7 @@ export default function EquipoPage() {
       {tab === "propinas" && <div className="mt-6"><TipsPanel team={active} /></div>}
 
       {tab === "equipo" && (
-      <div className="mt-6 grid gap-4 xl:grid-cols-12">
+      <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-12">
         <Panel className="animate-enter p-2 sm:p-2 xl:col-span-7">
           <ul className="divide-y">
             {active.map((s) => {

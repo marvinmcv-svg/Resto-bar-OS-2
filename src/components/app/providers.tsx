@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ServiceWorker } from "./pwa";
 
 const DARK = ["/pos", "/cocina", "/caja", "/entrar"];
 
@@ -21,6 +22,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <TooltipProvider delayDuration={300}>
         {children}
         <Toaster position="top-center" />
+        <ServiceWorker />
       </TooltipProvider>
     </ThemeProvider>
   );

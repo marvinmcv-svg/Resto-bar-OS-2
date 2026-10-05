@@ -142,7 +142,7 @@ export default function ResumenPage() {
         <KpiCard icon={HandCoins} label="Propinas" value={formatBsShort(tips)} note={`en ${tipped} cuentas`} series={series.tips} />
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-12">
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12">
         <Panel className="animate-enter lg:col-span-8">
           <PanelHeader
             title="Ventas por hora"

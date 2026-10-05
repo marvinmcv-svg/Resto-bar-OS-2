@@ -8,6 +8,10 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 export const metadata: Metadata = {
   title: "RestoBar OS",
   description: "Sistema para restaurantes y bares: pedidos, cocina, facturación SIN y cierre diario en tu WhatsApp.",
+  applicationName: "RestoBar OS",
+  appleWebApp: { capable: true, title: "RestoBar", statusBarStyle: "black" },
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {

@@ -94,8 +94,8 @@ export default function FloorPage() {
                   aria-label={`Mesa ${t.label}, ${STATUS_LABEL[status]}`}
                   style={{ gridColumn: `${t.x} / span ${t.w ?? 2}`, gridRow: `${t.y} / span ${t.h ?? 2}` }}
                   className={cn(
-                    "press relative flex min-h-[96px] flex-col items-center justify-center gap-1 border-[1.5px] p-2 text-center hover:brightness-110",
-                    t.shape === "round" ? "aspect-square justify-self-center rounded-full" : "rounded-[22px]",
+                    "press relative flex min-h-[72px] flex-col sm:min-h-[96px] items-center justify-center gap-1 border-[1.5px] p-2 text-center hover:brightness-110",
+                    t.shape === "round" ? "aspect-square max-w-full justify-self-center rounded-full" : "rounded-[22px]",
                     TILE[status],
                   )}
                 >

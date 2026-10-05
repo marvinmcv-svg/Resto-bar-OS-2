@@ -7,6 +7,12 @@ import { StoreProvider } from "@/modules/pos/store";
 import AdminPage from "@/app/(admin)/admin/page";
 import CreditosPage from "@/app/(admin)/creditos/page";
 import EquipoPage from "@/app/(admin)/equipo/page";
+import InventarioPage from "@/app/(admin)/inventario/page";
+import ClientesPage from "@/app/(admin)/clientes/page";
+import ReservasPage from "@/app/(admin)/reservas/page";
+import PagosPage from "@/app/(admin)/pagos/page";
+import MarketingPage from "@/app/(admin)/marketing/page";
+import AnaliticaPage from "@/app/(admin)/analitica/page";
 import KitchenPage from "@/app/(pos)/cocina/page";
 import CajaPage from "@/app/(pos)/caja/page";
 import EntrarPage from "@/app/entrar/page";
@@ -28,6 +34,12 @@ function Screen() {
     "/admin": () => <AdminPage />,
     "/menu": () => <MenuPage />,
     "/equipo": () => <EquipoPage />,
+    "/inventario": () => <InventarioPage />,
+    "/clientes": () => <ClientesPage />,
+    "/reservas": () => <ReservasPage />,
+    "/pagos": () => <PagosPage />,
+    "/marketing": () => <MarketingPage />,
+    "/analitica": () => <AnaliticaPage />,
     "/creditos": () => <CreditosPage />,
   };
   return <AdminShell>{(pages[path] ?? (() => <ResumenPage />))()}</AdminShell>;

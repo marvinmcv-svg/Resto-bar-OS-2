@@ -14,12 +14,18 @@ import {
   type ClosedCashShift, type StaffProfile, type TipSplit,
 } from "../hr/demo-hr";
 import type { ScheduleShift, TimeEntry } from "../hr/time";
+import { consumption, costOfMinor, type Ingredient, type Recipes, type RecipeLine, type StockMovement, type Supplier } from "../inventory/inventory";
+import { INGREDIENTS, RECIPES, seedStockMovements, SUPPLIERS } from "../inventory/demo-inventory";
+import type { Guest } from "../guests/guests";
+import { seedCampaigns, seedGuests, seedReservations, seedSalesDays, type Campaign } from "../guests/demo-guests";
+import type { Reservation, ReservationStatus } from "../reservations/reservations";
+import type { DaySales } from "../analytics/analytics";
 import type {
   CashMovement, Category, ChosenModifier, GuestNote, MenuItem, Order, Payment, PaymentMethod, PaymentRecord, ShiftNote, Staff,
   WaitlistEntry,
 } from "./types";
 
-const STORAGE_KEY = "restobar-demo-v3";
+const STORAGE_KEY = "restobar-demo-v4";
 
 export interface State {
   live: Order[];
@@ -49,6 +55,16 @@ export interface State {
   schedule: ScheduleShift[];
   timeEntries: TimeEntry[];
   tipSplits: TipSplit[];
+  suppliers: Supplier[];
+  /** stockMilli is the running total of the stock ledger. */
+  ingredients: Ingredient[];
+  recipes: Recipes;
+  stockMovements: StockMovement[];
+  guests: Guest[];
+  reservations: Reservation[];
+  campaigns: Campaign[];
+  /** Closed days before today, for analytics. Today comes from `history`. */
+  salesDays: DaySales[];
 }
 
 type Action =
@@ -90,6 +106,13 @@ type Action =
   | { type: "saveTipSplit"; split: TipSplit }
   | { type: "markTipPaid"; splitId: string; staffId: string; at: number }
   | { type: "upsertProfile"; staffId: string; profile: StaffProfile }
+  | { type: "stockMovement"; movement: StockMovement; unitCostMinor?: number }
+  | { type: "upsertIngredient"; ingredient: Ingredient }
+  | { type: "setRecipe"; itemId: string; lines: RecipeLine[] }
+  | { type: "upsertGuest"; guest: Guest }
+  | { type: "upsertReservation"; reservation: Reservation }
+  | { type: "setReservationStatus"; id: string; status: ReservationStatus }
+  | { type: "logCampaign"; campaign: Campaign }
   | { type: "replace"; state: State };
 
 /** Seeded tickets look like a real rush: old ones served, recent ones on the line. */
@@ -117,7 +140,7 @@ function seedCash(now: number, history: HistoricOrder[]): Pick<State, "cashShift
       { id: "cm-2", shiftId, kind: "in", amountMinor: 20000, reason: "cambio", note: "Cambio del banco", at: day(13, 5), by: "s-carla" },
     ],
     payments: history.filter((o) => o.closedAt <= now).map((o) => ({
-      id: `p-${o.id}`, shiftId, orderId: o.id, tableId: "", method: o.method, amountMinor: o.totalMinor, tipMinor: o.tipMinor, at: o.closedAt,
+      id: `p-${o.id}`, shiftId, orderId: o.id, tableId: TABLES[(Number(o.id.split("-")[1]) * 7 + Number(o.id.split("-")[2])) % TABLES.length].id, method: o.method, amountMinor: o.totalMinor, tipMinor: o.tipMinor, at: o.closedAt,
       by: "s-carla",
     })),
   };
@@ -145,13 +168,23 @@ function seed(): State {
     schedule,
     timeEntries: seedTimeEntries(schedule, now),
     tipSplits: [],
+    suppliers: SUPPLIERS,
+    ingredients: INGREDIENTS,
+    recipes: RECIPES,
+    stockMovements: seedStockMovements(now),
+    guests: seedGuests(now),
+    reservations: seedReservations(now),
+    campaigns: seedCampaigns(now),
+    salesDays: seedSalesDays(now),
     shiftNote: {
       text: "Mesa 7 reservada 21:00 (cumpleaños, 8 pers.). Recomendar Chuflay con Rujero. Helado agotado.",
       by: "s-daniela",
       at: new Date(new Date(now).setHours(11, 20, 0, 0)).getTime(),
     },
     shiftNoteSeenBy: [],
-    tableNotes: { m7: { name: "Familia Rojas", occasion: "cumpleanos", text: "Torta propia, traer velas" } },
+    tableNotes: {
+      m7: { guestId: "g-rojas", name: "Familia Rojas", occasion: "cumpleanos", text: "Torta propia, traer velas" },
+    },
     waitlist: [
       { id: "w1", name: "Gabriela", party: 4, addedAt: now - 12 * 60000, quotedMin: 20 },
       { id: "w2", name: "Andrés", party: 2, addedAt: now - 4 * 60000, quotedMin: 10 },
@@ -163,6 +196,22 @@ const uid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? cry
 
 function mapOrder(state: State, orderId: string, fn: (o: Order) => Order): State {
   return { ...state, live: state.live.map((o) => (o.id === orderId ? fn(o) : o)) };
+}
+
+/** Appends to the stock ledger and moves each ingredient's running total. Waste gets its cost. */
+function applyStock(state: State, moves: StockMovement[]): State {
+  const delta = new Map<string, number>();
+  for (const m of moves) delta.set(m.ingredientId, (delta.get(m.ingredientId) ?? 0) + m.deltaMilli);
+  const priced = moves.map((m) => {
+    if (m.kind !== "waste" || m.costMinor !== undefined) return m;
+    const ing = state.ingredients.find((i) => i.id === m.ingredientId);
+    return ing ? { ...m, costMinor: costOfMinor(ing, -m.deltaMilli) } : m;
+  });
+  return {
+    ...state,
+    stockMovements: [...state.stockMovements, ...priced],
+    ingredients: state.ingredients.map((i) => (delta.has(i.id) ? { ...i, stockMilli: i.stockMilli + delta.get(i.id)! } : i)),
+  };
 }
 
 function reducer(state: State, a: Action): State {
@@ -211,11 +260,20 @@ function reducer(state: State, a: Action): State {
         voids: [...state.voids, rec],
       };
     }
-    case "send":
-      return mapOrder(state, a.orderId, (o) => ({
+    case "send": {
+      // Firing lines consumes their recipes from stock (server-side 'sale' movements in production).
+      const order = state.live.find((o) => o.id === a.orderId);
+      const fired = order?.lines.filter((l) => !l.sentAt && !l.voided) ?? [];
+      const used = consumption(fired.map((l) => ({ itemId: l.itemId, qty: l.qty })), state.recipes);
+      const moves: StockMovement[] = [...used].map(([ingredientId, qty]) => ({
+        id: uid(), ingredientId, kind: "sale", deltaMilli: -qty, at: a.at, by: state.staffId, orderId: a.orderId,
+      }));
+      const next = mapOrder(state, a.orderId, (o) => ({
         ...o,
         lines: o.lines.map((l) => (l.sentAt || l.voided ? l : { ...l, sentAt: a.at })),
       }));
+      return moves.length ? applyStock(next, moves) : next;
+    }
     case "requestBill":
       return mapOrder(state, a.orderId, (o) => ({ ...o, billRequested: a.value }));
     case "pay": {
@@ -242,8 +300,14 @@ function reducer(state: State, a: Action): State {
         waiterId: updated.waiterId,
       };
       const tableNotes = { ...state.tableNotes };
+      const guestId = tableNotes[order.tableId]?.guestId;
       delete tableNotes[order.tableId];
-      return { ...state, live: state.live.filter((o) => o.id !== a.orderId), history: [...state.history, hist], tableNotes };
+      const guests = guestId
+        ? state.guests.map((g) =>
+            g.id === guestId ? { ...g, visits: g.visits + 1, spentMinor: g.spentMinor + hist.totalMinor, lastVisitAt: a.payment.at } : g,
+          )
+        : state.guests;
+      return { ...state, live: state.live.filter((o) => o.id !== a.orderId), history: [...state.history, hist], tableNotes, guests };
     }
     case "cancelEmpty":
       return { ...state, live: state.live.filter((o) => !(o.id === a.orderId && o.lines.length === 0)) };
@@ -362,6 +426,43 @@ function reducer(state: State, a: Action): State {
       };
     case "upsertProfile":
       return { ...state, profiles: { ...state.profiles, [a.staffId]: a.profile } };
+    case "stockMovement": {
+      const next = applyStock(state, [a.movement]);
+      return a.unitCostMinor === undefined
+        ? next
+        : { ...next, ingredients: next.ingredients.map((i) => (i.id === a.movement.ingredientId ? { ...i, unitCostMinor: a.unitCostMinor! } : i)) };
+    }
+    case "upsertIngredient":
+      return {
+        ...state,
+        ingredients: state.ingredients.some((i) => i.id === a.ingredient.id)
+          ? state.ingredients.map((i) => (i.id === a.ingredient.id ? { ...a.ingredient, stockMilli: i.stockMilli } : i))
+          : [...state.ingredients, a.ingredient],
+      };
+    case "setRecipe": {
+      const recipes = { ...state.recipes };
+      if (a.lines.length) recipes[a.itemId] = a.lines;
+      else delete recipes[a.itemId];
+      return { ...state, recipes };
+    }
+    case "upsertGuest":
+      return {
+        ...state,
+        guests: state.guests.some((g) => g.id === a.guest.id)
+          ? state.guests.map((g) => (g.id === a.guest.id ? a.guest : g))
+          : [a.guest, ...state.guests],
+      };
+    case "upsertReservation":
+      return {
+        ...state,
+        reservations: state.reservations.some((x) => x.id === a.reservation.id)
+          ? state.reservations.map((x) => (x.id === a.reservation.id ? a.reservation : x))
+          : [...state.reservations, a.reservation],
+      };
+    case "setReservationStatus":
+      return { ...state, reservations: state.reservations.map((x) => (x.id === a.id ? { ...x, status: a.status } : x)) };
+    case "logCampaign":
+      return { ...state, campaigns: [a.campaign, ...state.campaigns] };
     case "kdsRecall":
       return mapOrder(state, a.orderId, (o) => ({
         ...o,
@@ -412,6 +513,7 @@ export function StoreProvider({ children, fallback }: { children: ReactNode; fal
         ? {
             ...seed(), menu: loaded.menu, categories: loaded.categories, staff: loaded.staff, clients: loaded.clients,
             sessionStaffId: loaded.sessionStaffId, profiles: loaded.profiles,
+            suppliers: loaded.suppliers ?? SUPPLIERS, recipes: loaded.recipes ?? RECIPES, guests: loaded.guests ?? seedGuests(Date.now()),
           }
         : seed();
     dispatch({ type: "replace", state: next });

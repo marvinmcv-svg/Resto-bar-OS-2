@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-export const STORAGE_KEY = "restobar-demo-v3";
+export const STORAGE_KEY = "restobar-demo-v4";
 const PINS: Record<string, string> = { Roberto: "0000", Daniela: "1234", Carla: "2222", Ana: "1111", Jorge: "4444", Rosa: "5555", Marvin: "9999" };
 
 /** Edits the persisted demo state (signed out first), then reloads. */

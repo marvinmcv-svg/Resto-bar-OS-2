@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils";
 export function PosRail() {
   const pathname = usePathname();
   const { me } = useStore();
-  const items = me ? areasFor(me.role).filter((a) => a.href !== "/admin") : [];
+  // Service screens only; the back office is one tap away in the user menu.
+  const items = me ? areasFor(me.role).filter((a) => a.group === "servicio" || a.href === "/resumen") : [];
   return (
     <nav
       aria-label="Principal"

@@ -24,6 +24,8 @@ export const roleEnum = pgEnum("member_role", ["owner", "manager", "cashier", "w
 export const orderStatusEnum = pgEnum("order_status", ["open", "paid", "voided"]);
 export const paymentMethodEnum = pgEnum("payment_method", ["cash", "qr", "card_external", "transfer", "other"]);
 export const payTypeEnum = pgEnum("pay_type", ["monthly", "hourly", "per_shift"]);
+export const stockMovementKindEnum = pgEnum("stock_movement_kind", ["receive", "sale", "waste", "count"]);
+export const reservationStatusEnum = pgEnum("reservation_status", ["confirmada", "sentada", "no-show", "cancelada"]);
 export const cashMovementKindEnum = pgEnum("cash_movement_kind", ["in", "out"]);
 export const invoiceStatusEnum = pgEnum("invoice_status", [
   "pending", "issued", "contingency", "failed", "cancel_requested", "cancelled",
@@ -92,7 +94,7 @@ export const menuItems = pgTable("menu_items", {
   imageUrl: text("image_url"),
   popular: boolean("popular").notNull().default(false),
   ...timestamps,
-}, (t) => [sameTenantLocation(t)]);
+}, (t) => [sameTenantLocation(t), unique("menu_items_tenant_id_key").on(t.tenantId, t.id)]);
 
 export const diningTables = pgTable("dining_tables", {
   id: id(),
@@ -255,3 +257,107 @@ export const tipDistributions = pgTable("tip_distributions", {
   createdBy: uuid("created_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [sameTenantLocation(t), sameTenantShift(t), sameTenantStaff(t)]);
+
+// ---------- Inventory, guests, reservations, campaigns (ADR-013) ----------
+
+export const suppliers = pgTable("suppliers", {
+  id: id(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  ...timestamps,
+}, (t) => [sameTenantLocation(t), unique().on(t.tenantId, t.id)]);
+
+// Quantities in integer thousandths of the unit; money in centavos.
+export const ingredients = pgTable("ingredients", {
+  id: id(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  unit: text("unit").notNull(), // 'kg' | 'l' | 'u'
+  parMilli: bigint("par_milli", { mode: "number" }).notNull().default(0),
+  unitCostMinor: bigint("unit_cost_minor", { mode: "number" }).notNull().default(0),
+  supplierId: uuid("supplier_id"),
+  ...timestamps,
+}, (t) => [
+  sameTenantLocation(t), unique().on(t.tenantId, t.id),
+  foreignKey({ columns: [t.tenantId, t.supplierId], foreignColumns: [suppliers.tenantId, suppliers.id] }),
+]);
+
+export const recipeItems = pgTable("recipe_items", {
+  id: id(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  menuItemId: uuid("menu_item_id").notNull(),
+  ingredientId: uuid("ingredient_id").notNull(),
+  qtyMilli: bigint("qty_milli", { mode: "number" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  sameTenantLocation(t), unique().on(t.menuItemId, t.ingredientId),
+  foreignKey({ columns: [t.tenantId, t.menuItemId], foreignColumns: [menuItems.tenantId, menuItems.id] }),
+  foreignKey({ columns: [t.tenantId, t.ingredientId], foreignColumns: [ingredients.tenantId, ingredients.id] }),
+]);
+
+// Append-only; stock on hand is the sum per ingredient (view ingredient_stock).
+export const stockMovements = pgTable("stock_movements", {
+  id: uuid("id").primaryKey(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  ingredientId: uuid("ingredient_id").notNull(),
+  kind: stockMovementKindEnum("kind").notNull(),
+  deltaMilli: bigint("delta_milli", { mode: "number" }).notNull(),
+  costMinor: bigint("cost_minor", { mode: "number" }),
+  reason: text("reason"),
+  orderId: uuid("order_id"),
+  createdBy: uuid("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  sameTenantLocation(t),
+  foreignKey({ columns: [t.tenantId, t.ingredientId], foreignColumns: [ingredients.tenantId, ingredients.id] }),
+]);
+
+export const guests = pgTable("guests", {
+  id: uuid("id").primaryKey(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  birthday: text("birthday"), // MM-DD
+  tags: text("tags").array().notNull().default([]),
+  notes: text("notes"),
+  optIn: boolean("opt_in").notNull().default(false),
+  ...timestamps,
+}, (t) => [sameTenantLocation(t), unique().on(t.tenantId, t.id)]);
+
+export const reservations = pgTable("reservations", {
+  id: uuid("id").primaryKey(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  guestId: uuid("guest_id"),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  party: integer("party").notNull(),
+  startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+  durationMin: integer("duration_min").notNull().default(120),
+  tableId: uuid("table_id").references(() => diningTables.id),
+  status: reservationStatusEnum("status").notNull().default("confirmada"),
+  notes: text("notes"),
+  createdBy: uuid("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  sameTenantLocation(t),
+  foreignKey({ columns: [t.tenantId, t.guestId], foreignColumns: [guests.tenantId, guests.id] }),
+]);
+
+export const campaigns = pgTable("campaigns", {
+  id: uuid("id").primaryKey(),
+  tenantId: tenantId(),
+  locationId: locationId(),
+  segment: text("segment").notNull(),
+  message: text("message").notNull(),
+  recipients: integer("recipients").notNull().default(0),
+  createdBy: uuid("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [sameTenantLocation(t)]);

@@ -12,6 +12,8 @@ const CASHIER_A = "10000000-0000-0000-0000-0000000000a3";
 const MANAGER_A = "10000000-0000-0000-0000-0000000000a4";
 const SHIFT_A = "40000000-0000-0000-0000-00000000000a";
 const STAFF_A = "50000000-0000-0000-0000-00000000000a";
+const KITCHEN_A = "10000000-0000-0000-0000-0000000000a5";
+const ING_A = "60000000-0000-0000-0000-00000000000a";
 const ORDER_A = "30000000-0000-0000-0000-00000000000a";
 
 let db: PGlite;
@@ -35,7 +37,7 @@ async function asUser(userId: string, sql: string, params: unknown[] = []) {
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(SUPABASE_SHIM);
-  for (const m of ["0001_core.sql", "0002_roles_menu.sql", "0003_cash_hr.sql"]) {
+  for (const m of ["0001_core.sql", "0002_roles_menu.sql", "0003_cash_hr.sql", "0004_inventory_guests.sql"]) {
     await db.exec(readFileSync(join(__dirname, "../../supabase/migrations", m), "utf8"));
   }
   await db.exec(`
@@ -61,6 +63,11 @@ beforeAll(async () => {
     values ($1, $2, $3, '1234567', 'monthly', 300000)`, [STAFF_A, A.tenant, A.loc]);
   await db.query(`insert into cash_movements (id, tenant_id, location_id, shift_id, kind, amount_minor, reason, created_by)
     values (gen_random_uuid(), $1, $2, $3, 'out', 12000, 'compra', $4)`, [A.tenant, A.loc, SHIFT_A, CASHIER_A]);
+  await db.query(`insert into memberships (tenant_id, user_id, role) values ($1, $2, 'kitchen')`, [A.tenant, KITCHEN_A]);
+  await db.query(`insert into ingredients (id, tenant_id, location_id, name, category, unit, unit_cost_minor) values ($1, $2, $3, 'Papa', 'verduras', 'kg', 600)`,
+    [ING_A, A.tenant, A.loc]);
+  await db.query(`insert into stock_movements (id, tenant_id, location_id, ingredient_id, kind, delta_milli, created_by)
+    values (gen_random_uuid(), $1, $2, $3, 'receive', 10000, $4)`, [A.tenant, A.loc, ING_A, A.user]);
   await db.query(`insert into time_entries (id, tenant_id, location_id, staff_id, in_at) values (gen_random_uuid(), $1, $2, $3, now())`,
     [A.tenant, A.loc, STAFF_A]);
   await db.query(`insert into orders (id, tenant_id, location_id, total_minor) values ($1, $2, $3, 5000)`, [ORDER_A, A.tenant, A.loc]);
@@ -231,5 +238,47 @@ describe("Cash register and HR (ADR-012)", () => {
       db.query(`insert into payments (tenant_id, location_id, order_id, shift_id, method, amount_minor)
         select $1, $2, id, $3, 'cash', 1 from orders where tenant_id = $1 limit 1`, [B.tenant, B.loc, SHIFT_A]),
     ).rejects.toThrow(/foreign key/);
+  });
+});
+
+describe("Inventory, guests and reservations (ADR-013)", () => {
+  const move = (user: string, kind: string, delta: number) =>
+    asUser(user,
+      `insert into stock_movements (id, tenant_id, location_id, ingredient_id, kind, delta_milli, created_by)
+       values (gen_random_uuid(), $1, $2, $3, $4, $5, $6) returning id`,
+      [A.tenant, A.loc, ING_A, kind, delta, user]);
+
+  it("the kitchen logs waste but can't receive stock, change costs or fake sales", async () => {
+    expect((await move(KITCHEN_A, "waste", -500)).rows).toHaveLength(1);
+    await expect(move(KITCHEN_A, "receive", 1000)).rejects.toThrow(/row-level security/);
+    await expect(move(MANAGER_A, "sale", -100)).rejects.toThrow(/row-level security/);
+    expect((await asUser(KITCHEN_A, "update ingredients set unit_cost_minor = 1")).affectedRows).toBe(0);
+  });
+
+  it("the stock ledger is append-only and the view sums it", async () => {
+    expect((await asUser(A.user, "update stock_movements set delta_milli = 0")).affectedRows).toBe(0);
+    expect((await asUser(A.user, "delete from stock_movements")).affectedRows).toBe(0);
+    const stock = await asUser(A.user, "select stock_milli from ingredient_stock where ingredient_id = $1", [ING_A]);
+    expect(stock.rows).toEqual([{ stock_milli: 9500 }]);
+    expect((await asUser(B.user, "select * from ingredient_stock")).rows).toHaveLength(0);
+  });
+
+  it("waste must reduce stock and receipts must add to it", async () => {
+    await expect(move(A.user, "waste", 500)).rejects.toThrow(/check constraint/);
+    await expect(move(A.user, "receive", -500)).rejects.toThrow(/check constraint/);
+  });
+
+  it("front of house books tables and records guests; the kitchen can't; nobody deletes them", async () => {
+    const guest = (user: string) =>
+      asUser(user, `insert into guests (id, tenant_id, location_id, name, phone) values (gen_random_uuid(), $1, $2, 'Gabriela', '+591 70000009') returning id`,
+        [A.tenant, A.loc]);
+    expect((await guest(WAITER_A)).rows).toHaveLength(1);
+    await expect(guest(KITCHEN_A)).rejects.toThrow(/row-level security/);
+    const booking = await asUser(CASHIER_A,
+      `insert into reservations (id, tenant_id, location_id, name, party, starts_at, created_by)
+       values (gen_random_uuid(), $1, $2, 'Gabriela', 4, now() + interval '1 day', $3) returning id`, [A.tenant, A.loc, CASHIER_A]);
+    expect(booking.rows).toHaveLength(1);
+    expect((await asUser(A.user, "delete from reservations")).affectedRows).toBe(0);
+    expect((await asUser(A.user, "delete from guests")).affectedRows).toBe(0);
   });
 });
